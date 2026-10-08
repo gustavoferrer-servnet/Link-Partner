@@ -8,6 +8,7 @@ const OpportunityDetailPage = lazy(() => import('./pages/OpportunityDetailPage')
 const CoveragePage = lazy(() => import('./pages/CoveragePage').then((module) => ({ default: module.CoveragePage })));
 const SuppliersPage = lazy(() => import('./pages/SuppliersPage').then((module) => ({ default: module.SuppliersPage })));
 const DeliveriesPage = lazy(() => import('./pages/DeliveriesPage').then((module) => ({ default: module.DeliveriesPage })));
+const DeliveryProjectPage = lazy(() => import('./pages/DeliveryProjectPage').then((module) => ({ default: module.DeliveryProjectPage })));
 const ProfitabilityPage = lazy(() => import('./pages/ProfitabilityPage').then((module) => ({ default: module.ProfitabilityPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })));
 
@@ -25,6 +26,7 @@ export function App() {
         <Route path="coverage" element={<Deferred><CoveragePage /></Deferred>} />
         <Route path="suppliers" element={<Deferred><SuppliersPage /></Deferred>} />
         <Route path="deliveries" element={<Deferred><DeliveriesPage /></Deferred>} />
+        <Route path="deliveries/:id" element={<Deferred><DeliveryProjectPage /></Deferred>} />
         <Route path="profitability" element={<Deferred><ProfitabilityPage /></Deferred>} />
         <Route path="admin" element={<Deferred><AdminPage /></Deferred>} />
         <Route path="*" element={<Navigate to="/" replace />} />

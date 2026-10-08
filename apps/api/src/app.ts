@@ -19,7 +19,7 @@ app.use(cors({
 app.use(express.json({ limit: '30mb' }));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'link-partner-api', version: '0.1.1' });
+  res.json({ status: 'ok', service: 'link-partner-api', version: '0.2.0' });
 });
 app.use('/api/v1', apiRouter);
 app.use(notFound);

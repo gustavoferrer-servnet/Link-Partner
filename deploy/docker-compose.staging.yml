@@ -2,7 +2,7 @@ name: link-partner-staging
 
 services:
   link-partner-data-init:
-    image: link-partner-api:${LINK_PARTNER_VERSION:-0.1.1}
+    image: link-partner-api:${LINK_PARTNER_VERSION:-0.2.0}
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -15,7 +15,7 @@ services:
       - no-new-privileges:true
 
   link-partner-api:
-    image: link-partner-api:${LINK_PARTNER_VERSION:-0.1.1}
+    image: link-partner-api:${LINK_PARTNER_VERSION:-0.2.0}
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -50,7 +50,7 @@ services:
       - no-new-privileges:true
 
   link-partner-web:
-    image: link-partner-web:${LINK_PARTNER_VERSION:-0.1.1}
+    image: link-partner-web:${LINK_PARTNER_VERSION:-0.2.0}
     build:
       context: ..
       dockerfile: apps/web/Dockerfile

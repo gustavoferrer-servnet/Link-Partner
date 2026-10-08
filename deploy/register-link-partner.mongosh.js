@@ -37,7 +37,7 @@ db.deployments.updateOne(
     $set: {
       baseUrl: "https://ai-stg-node02.serv.net.mx:3446",
       launchPath: "/",
-      version: "0.1.1",
+      version: "0.2.0",
       hostingType: "on_premise",
       allocation: "shared",
       dedicatedTenantId: null,

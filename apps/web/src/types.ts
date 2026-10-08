@@ -72,6 +72,77 @@ export interface Delivery {
   blocker?: string;
 }
 
+export type OperationalStatus = 'Pendiente' | 'En curso' | 'En espera' | 'Cancelado' | 'Concluido';
+export type ScheduleStatus = 'En tiempo' | 'En riesgo' | 'Retrasado';
+
+export interface ProjectTask {
+  id: string;
+  externalCode: string | null;
+  name: string;
+  stage: string;
+  area: string;
+  owner: string;
+  status: OperationalStatus;
+  scheduleStatus: ScheduleStatus;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+  dependencies: string[];
+  evidenceCount: number;
+}
+
+export interface DeliveryDeviation {
+  id: string;
+  taskId: string | null;
+  date: string;
+  area: string;
+  type: 'Riesgo' | 'Dependencia' | 'Bloqueo';
+  description: string;
+  impact: 'Alto' | 'Medio' | 'Bajo';
+  actions: string;
+  owner: string;
+  targetDate: string | null;
+  status: 'Abierto' | 'En corrección' | 'Resuelto';
+  solvedAt: string | null;
+}
+
+export interface DeliveryProject {
+  id: string;
+  opportunityId: string;
+  serviceLineId: string;
+  client: string;
+  site: string;
+  flow: 'Servnet' | 'Terceros' | 'Híbrido';
+  infrastructure: 'Red Servnet' | 'Tercero' | 'Híbrida';
+  provider: string | null;
+  service: string;
+  capacity: string;
+  serviceDeliveryOwner: string;
+  stage: string;
+  operationalStatus: OperationalStatus;
+  scheduleStatus: ScheduleStatus;
+  risk: 'Alto' | 'Medio' | 'Bajo';
+  nextAction: string;
+  originalCommitment: string | null;
+  currentCommitment: string | null;
+  forecastDate: string | null;
+  actualDeliveryDate: string | null;
+  requiresCfe: boolean;
+  externalRefs: { wsasRequestId: string | null; hubspotObjectId: string | null; wsasServiceId: string | null };
+  source: 'Link Partner' | 'WSAS';
+  lastSyncAt: string | null;
+  syncStatus: 'Sincronizado' | 'Pendiente' | 'Error' | 'Simulado';
+  tasks: ProjectTask[];
+  commitmentHistory: Array<{ id: string; previousDate: string | null; newDate: string; reason: string; author: string; changedAt: string }>;
+  deviations: DeliveryDeviation[];
+  documents: Array<{ id: string; taskId: string | null; name: string; type: string; url: string; author: string; createdAt: string }>;
+  cfeRoutes: Array<{ id: string; route: string; stage: string; year: number; registrationDate: string | null; visitDate: string | null; releaseDate: string | null; owner: string; nextAction: string; followUpDate: string | null; comments: string; blockingTaskId: string | null }>;
+  closures: { technicalDelivery: boolean; monitoring: boolean; billing: boolean; administrative: boolean; customerExperience: boolean; supplierBilling: boolean };
+  auditEvents: Array<{ id: string; action: string; entity: string; actor: string; occurredAt: string; source: 'Link Partner' | 'WSAS' | 'HubSpot'; summary: string }>;
+  syncOperations: Array<{ id: string; target: 'WSAS' | 'HubSpot'; action: string; status: 'Pendiente' | 'Enviada' | 'Confirmada' | 'Error'; attempts: number; lastAttemptAt: string | null; error: string | null }>;
+}
+
 export interface SessionUser {
   authUid: string;
   email: string;

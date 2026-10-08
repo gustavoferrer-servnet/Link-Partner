@@ -1,12 +1,13 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { config } from '../config.js';
-import type { AppUser, SupplierCoverageRecord, SupplierRecord } from '../types.js';
+import type { AppUser, DeliveryProjectRecord, SupplierCoverageRecord, SupplierRecord } from '../types.js';
 import { MemoryRepository } from './MemoryRepository.js';
 
 interface PersistedState {
   suppliers: SupplierRecord[];
   supplierCoverages: SupplierCoverageRecord[];
+  deliveryProjects: DeliveryProjectRecord[];
 }
 
 export class FileRepository extends MemoryRepository {
@@ -25,6 +26,7 @@ export class FileRepository extends MemoryRepository {
       const state = JSON.parse(await readFile(this.filePath, 'utf8')) as Partial<PersistedState>;
       if (Array.isArray(state.suppliers)) this.suppliers = state.suppliers;
       if (Array.isArray(state.supplierCoverages)) this.supplierCoverages = state.supplierCoverages;
+      if (Array.isArray(state.deliveryProjects)) this.deliveryProjects = state.deliveryProjects;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -34,6 +36,7 @@ export class FileRepository extends MemoryRepository {
     const state: PersistedState = {
       suppliers: this.suppliers,
       supplierCoverages: this.supplierCoverages,
+      deliveryProjects: this.deliveryProjects,
     };
     const temporaryPath = `${this.filePath}.${process.pid}.tmp`;
     await mkdir(dirname(this.filePath), { recursive: true });
@@ -45,6 +48,7 @@ export class FileRepository extends MemoryRepository {
     const pending = this.writeQueue.then(async () => {
       const previousSuppliers = structuredClone(this.suppliers);
       const previousCoverages = structuredClone(this.supplierCoverages);
+      const previousDeliveryProjects = structuredClone(this.deliveryProjects);
 
       try {
         const result = await mutation();
@@ -53,6 +57,7 @@ export class FileRepository extends MemoryRepository {
       } catch (error) {
         this.suppliers = previousSuppliers;
         this.supplierCoverages = previousCoverages;
+        this.deliveryProjects = previousDeliveryProjects;
         throw error;
       }
     });
@@ -82,5 +87,22 @@ export class FileRepository extends MemoryRepository {
   override async upsertSupplierCoverage(record: SupplierCoverageRecord, user: AppUser) {
     await this.ready;
     return this.queueMutation(() => super.upsertSupplierCoverage(record, user));
+  }
+
+  override async listDeliveryProjects(user: AppUser) {
+    await this.ready;
+    await this.writeQueue;
+    return super.listDeliveryProjects(user);
+  }
+
+  override async getDeliveryProject(id: string, user: AppUser) {
+    await this.ready;
+    await this.writeQueue;
+    return super.getDeliveryProject(id, user);
+  }
+
+  override async saveDeliveryProject(record: DeliveryProjectRecord, user: AppUser) {
+    await this.ready;
+    return this.queueMutation(() => super.saveDeliveryProject(record, user));
   }
 }

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { authenticate, loadAppUser, requireRole } from '../middleware/auth.js';
 import { repository } from '../repositories/index.js';
@@ -22,6 +22,56 @@ const coverageSchema = z.object({
     features: z.array(z.record(z.string(), z.unknown())).min(1).max(50_000),
   }),
 });
+
+const deliveryActionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('task-status'),
+    taskId: z.string().min(1),
+    status: z.enum(['Pendiente', 'En curso', 'En espera', 'Cancelado', 'Concluido']),
+  }),
+  z.object({
+    type: z.literal('reprogram'),
+    newDate: z.string().date(),
+    reason: z.string().trim().min(5).max(500),
+  }),
+  z.object({
+    type: z.literal('add-deviation'),
+    taskId: z.string().nullable().optional(),
+    area: z.string().trim().min(2).max(100),
+    deviationType: z.enum(['Riesgo', 'Dependencia', 'Bloqueo']),
+    description: z.string().trim().min(5).max(1000),
+    impact: z.enum(['Alto', 'Medio', 'Bajo']),
+    actions: z.string().trim().min(3).max(1000),
+    owner: z.string().trim().min(2).max(120),
+    targetDate: z.string().date().nullable().optional(),
+  }),
+  z.object({
+    type: z.literal('toggle-closure'),
+    key: z.enum(['technicalDelivery', 'monitoring', 'billing', 'administrative', 'customerExperience', 'supplierBilling']),
+    value: z.boolean(),
+  }),
+  z.object({
+    type: z.literal('retry-sync'),
+    operationId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('add-document'),
+    taskId: z.string().nullable().optional(),
+    name: z.string().trim().min(2).max(200),
+    documentType: z.string().trim().min(2).max(100),
+    url: z.string().trim().url().max(1000),
+  }),
+  z.object({
+    type: z.literal('add-cfe-route'),
+    route: z.string().trim().min(2).max(120),
+    stage: z.string().trim().min(2).max(120),
+    year: z.number().int().min(2000).max(2200),
+    owner: z.string().trim().min(2).max(120),
+    nextAction: z.string().trim().min(3).max(500),
+    followUpDate: z.string().date().nullable().optional(),
+    blockingTaskId: z.string().nullable().optional(),
+  }),
+]);
 
 function supplierId(name: string, existingIds: Set<string>) {
   const stem = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 54) || 'PROVEEDOR';
@@ -181,3 +231,105 @@ apiRouter.get('/deliveries', async (req: AuthenticatedRequest, res, next) => {
   try { res.json({ status: 'success', data: await repository.listDeliveries(req.appUser!) }); }
   catch (error) { next(error); }
 });
+
+apiRouter.get(
+  '/delivery-projects',
+  requireRole('internal_admin', 'delivery_manager', 'pre_sales', 'buyer', 'noc', 'finance', 'viewer'),
+  async (req: AuthenticatedRequest, res, next) => {
+    try { res.json({ status: 'success', data: await repository.listDeliveryProjects(req.appUser!) }); }
+    catch (error) { next(error); }
+  },
+);
+
+apiRouter.get(
+  '/delivery-projects/:id',
+  requireRole('internal_admin', 'delivery_manager', 'pre_sales', 'buyer', 'noc', 'finance', 'viewer'),
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const project = await repository.getDeliveryProject(String(req.params.id), req.appUser!);
+      if (!project) {
+        res.status(404).json({ status: 'error', message: 'El proyecto de Service Delivery no existe o no puedes verlo.' });
+        return;
+      }
+      res.json({ status: 'success', data: project });
+    } catch (error) { next(error); }
+  },
+);
+
+apiRouter.post(
+  '/delivery-projects/:id/actions',
+  requireRole('internal_admin', 'delivery_manager'),
+  async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const parsed = deliveryActionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ status: 'error', message: 'La acción de Service Delivery no es válida.' });
+        return;
+      }
+
+      const project = await repository.getDeliveryProject(String(req.params.id), req.appUser!);
+      if (!project) {
+        res.status(404).json({ status: 'error', message: 'El proyecto de Service Delivery no existe.' });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const today = now.slice(0, 10);
+      const actor = req.appUser!.displayName || req.appUser!.email;
+      const action = parsed.data;
+      let summary = '';
+
+      if (action.type === 'task-status') {
+        const task = project.tasks.find((item) => item.id === action.taskId);
+        if (!task) {
+          res.status(404).json({ status: 'error', message: 'La actividad no existe.' });
+          return;
+        }
+        const previous = task.status;
+        task.status = action.status;
+        if (action.status === 'En curso' && !task.actualStart) task.actualStart = today;
+        if (action.status === 'Concluido' && !task.actualEnd) task.actualEnd = today;
+        if (action.status !== 'Concluido') task.actualEnd = null;
+        summary = `${task.name}: ${previous} → ${action.status}. La etapa del proyecto no se modificó automáticamente.`;
+      } else if (action.type === 'reprogram') {
+        const previousDate = project.currentCommitment;
+        project.currentCommitment = action.newDate;
+        project.commitmentHistory.unshift({ id: `CH-${randomUUID()}`, previousDate, newDate: action.newDate, reason: action.reason, author: actor, changedAt: now });
+        project.syncStatus = 'Pendiente';
+        project.syncOperations.unshift({ id: `SYNC-${randomUUID()}`, target: 'WSAS', action: 'Actualizar compromiso vigente', status: 'Pendiente', attempts: 0, lastAttemptAt: null, error: null });
+        summary = `Compromiso vigente ${previousDate || 'sin fecha'} → ${action.newDate}. Línea base conservada.`;
+      } else if (action.type === 'add-deviation') {
+        project.deviations.unshift({ id: `DEV-${randomUUID()}`, taskId: action.taskId ?? null, date: today, area: action.area, type: action.deviationType, description: action.description, impact: action.impact, actions: action.actions, owner: action.owner, targetDate: action.targetDate ?? null, status: 'Abierto', solvedAt: null });
+        summary = `${action.deviationType} ${action.impact.toLowerCase()} registrado para ${action.area}.`;
+      } else if (action.type === 'toggle-closure') {
+        project.closures[action.key] = action.value;
+        summary = `Cierre ${action.key} marcado como ${action.value ? 'concluido' : 'pendiente'} sin alterar los demás cierres.`;
+      } else if (action.type === 'retry-sync') {
+        const operation = project.syncOperations.find((item) => item.id === action.operationId);
+        if (!operation) {
+          res.status(404).json({ status: 'error', message: 'La operación de sincronización no existe.' });
+          return;
+        }
+        operation.attempts += 1;
+        operation.lastAttemptAt = now;
+        operation.status = 'Error';
+        operation.error = 'Adaptador MCP de WSAS no configurado; el avance local permanece intacto.';
+        project.syncStatus = 'Error';
+        summary = `Reintento ${operation.attempts} de ${operation.action}; sin duplicar la operación.`;
+      } else if (action.type === 'add-document') {
+        project.documents.unshift({ id: `DOC-${randomUUID()}`, taskId: action.taskId ?? null, name: action.name, type: action.documentType, url: action.url, author: actor, createdAt: now });
+        summary = `Documento ${action.name} vinculado al proyecto.`;
+      } else {
+        if (project.flow !== 'Servnet' || !project.requiresCfe) {
+          res.status(400).json({ status: 'error', message: 'CFE sólo aplica a proyectos Servnet que lo requieren.' });
+          return;
+        }
+        project.cfeRoutes.unshift({ id: `CFE-${randomUUID()}`, route: action.route, stage: action.stage, year: action.year, registrationDate: today, visitDate: null, releaseDate: null, owner: action.owner, nextAction: action.nextAction, followUpDate: action.followUpDate ?? null, comments: '', blockingTaskId: action.blockingTaskId ?? null });
+        summary = `Ruta CFE ${action.route} registrada.`;
+      }
+
+      project.auditEvents.unshift({ id: `AUD-${randomUUID()}`, action: action.type, entity: project.id, actor, occurredAt: now, source: 'Link Partner', summary });
+      res.json({ status: 'success', data: await repository.saveDeliveryProject(project, req.appUser!) });
+    } catch (error) { next(error); }
+  },
+);

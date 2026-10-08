@@ -1,4 +1,4 @@
-import type { AppUser, DeliveryRecord, OpportunityRecord, SupplierCoverageRecord, SupplierRecord } from '../types.js';
+import type { AppUser, DeliveryProjectRecord, DeliveryRecord, OpportunityRecord, SupplierCoverageRecord, SupplierRecord } from '../types.js';
 
 export interface Repository {
   getUserByAuthUid(authUid: string): Promise<AppUser | null>;
@@ -9,4 +9,7 @@ export interface Repository {
   listSupplierCoverages(user: AppUser): Promise<SupplierCoverageRecord[]>;
   upsertSupplierCoverage(record: SupplierCoverageRecord, user: AppUser): Promise<SupplierCoverageRecord>;
   listDeliveries(user: AppUser): Promise<DeliveryRecord[]>;
+  listDeliveryProjects(user: AppUser): Promise<DeliveryProjectRecord[]>;
+  getDeliveryProject(id: string, user: AppUser): Promise<DeliveryProjectRecord | null>;
+  saveDeliveryProject(record: DeliveryProjectRecord, user: AppUser): Promise<DeliveryProjectRecord>;
 }

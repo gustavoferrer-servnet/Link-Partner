@@ -19,7 +19,7 @@ export async function apiGet<T>(path: string, token: string | null, signal?: Abo
   return parseResponse<T>(response);
 }
 
-export async function apiSend<T>(path: string, token: string | null, method: 'POST' | 'PUT', data: unknown): Promise<T> {
+export async function apiSend<T>(path: string, token: string | null, method: 'POST' | 'PUT' | 'PATCH', data: unknown): Promise<T> {
   const response = await fetch(`${config.apiUrl}${path}`, {
     method,
     headers: {

@@ -22,8 +22,8 @@ const navItems = [
   { to: '/opportunities', label: 'Oportunidades', icon: Handshake },
   { to: '/coverage', label: 'Cobertura', icon: Map },
   { to: '/suppliers', label: 'Proveedores', icon: Building2 },
-  { to: '/deliveries', label: 'Entregas', icon: Truck },
-  { to: '/profitability', label: 'Rentabilidad', icon: BarChart3 },
+  { to: '/deliveries', label: 'Service Delivery', icon: Truck },
+  { to: '/profitability', label: 'Inteligencia', icon: BarChart3 },
   { to: '/admin', label: 'Administración', icon: Settings },
 ];
 
@@ -66,7 +66,7 @@ export function AppShell() {
         <div className="sidebar__foot">
           <strong>Link Partner</strong>
           <span>Conectividad que hace posible más negocios.</span>
-          <code>v0.1.1</code>
+          <code>v0.2.0</code>
         </div>
       </aside>
 

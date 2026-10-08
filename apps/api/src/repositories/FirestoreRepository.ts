@@ -1,7 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type CollectionReference, type DocumentData } from 'firebase-admin/firestore';
 import { config } from '../config.js';
-import type { AppUser, DeliveryRecord, OpportunityRecord, SupplierCoverageRecord, SupplierRecord } from '../types.js';
+import type { AppUser, DeliveryProjectRecord, DeliveryRecord, OpportunityRecord, SupplierCoverageRecord, SupplierRecord } from '../types.js';
 import type { Repository } from './Repository.js';
 
 const internalRoles = new Set(['internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'delivery_manager', 'noc', 'finance', 'viewer']);
@@ -75,5 +75,25 @@ export class FirestoreRepository implements Repository {
     let query: FirebaseFirestore.Query<DeliveryRecord> = collection<DeliveryRecord>('pmo_deliveries').orderBy('forecastDate');
     if (!isInternal(user)) query = query.where('participantId', '==', user.participantId);
     return (await query.limit(100).get()).docs.map((doc) => ({ ...doc.data(), id: doc.data().id || doc.id }));
+  }
+
+  async listDeliveryProjects(user: AppUser) {
+    let query: FirebaseFirestore.Query<DeliveryProjectRecord> = collection<DeliveryProjectRecord>('delivery_projects').orderBy('currentCommitment');
+    if (!isInternal(user)) query = query.where('participantId', '==', user.participantId);
+    return (await query.limit(200).get()).docs.map((doc) => structuredClone({ ...doc.data(), id: doc.data().id || doc.id }));
+  }
+
+  async getDeliveryProject(id: string, user: AppUser) {
+    const snapshot = await collection<DeliveryProjectRecord>('delivery_projects').doc(id).get();
+    if (!snapshot.exists) return null;
+    const record = snapshot.data()!;
+    if (!isInternal(user) && record.participantId !== user.participantId) return null;
+    return structuredClone(record);
+  }
+
+  async saveDeliveryProject(record: DeliveryProjectRecord, user: AppUser) {
+    if (!isInternal(user)) throw new Error('El usuario no puede modificar proyectos de entrega.');
+    await collection<DeliveryProjectRecord>('delivery_projects').doc(record.id).set(record);
+    return structuredClone(record);
   }
 }
