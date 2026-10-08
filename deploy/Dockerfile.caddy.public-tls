@@ -1,0 +1,4 @@
+ARG BASE_IMAGE=app-hub-staging-caddy:before-public-tls-20261006
+FROM ${BASE_IMAGE}
+
+COPY Caddyfile.ai-stg-node02 /etc/caddy/Caddyfile

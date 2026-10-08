@@ -1,0 +1,19 @@
+{$LINK_PARTNER_SITE:https://ai-stg-node02.serv.net.mx:3446} {
+  encode zstd gzip
+
+  @api path /api/*
+  handle @api {
+    reverse_proxy link-partner-api:3000
+  }
+
+  handle {
+    reverse_proxy link-partner-web:8080
+  }
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
+  }
+}

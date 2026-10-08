@@ -1,0 +1,10 @@
+{
+  "label": "Link Partner staging",
+  "baseUrl": "https://ai-stg-node02.serv.net.mx:3446",
+  "launchPath": "/",
+  "version": "0.1.1",
+  "hostingType": "on_premise",
+  "allocation": "shared",
+  "keycloakClientId": "link-partner-frontend",
+  "notes": "Deployment compartido en ai-stg-node02 sobre la red app-hub-staging_default."
+}

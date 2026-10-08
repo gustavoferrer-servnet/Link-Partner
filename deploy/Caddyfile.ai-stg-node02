@@ -1,0 +1,100 @@
+# Configuración compatible con el stack actual de Application Hub.
+# Los endpoints por IP conservan la CA interna. Los endpoints del dominio
+# canónico usan un certificado ACME público compartido por todos los puertos.
+{
+	skip_install_trust
+	default_sni {$STAGING_IP}
+}
+
+https://{$STAGING_IP}:{$FRONTEND_PORT} {
+	tls internal
+	reverse_proxy frontend:80
+}
+
+https://{$STAGING_HOST}:{$FRONTEND_PORT} {
+	reverse_proxy frontend:80
+}
+
+https://{$STAGING_IP}:8443 {
+	tls internal
+	reverse_proxy keycloak:8080
+}
+
+https://{$STAGING_HOST}:8443 {
+	reverse_proxy keycloak:8080
+}
+
+https://{$STAGING_IP}:9443 {
+	tls internal
+	reverse_proxy api:9222
+}
+
+https://{$STAGING_HOST}:9443 {
+	reverse_proxy api:9222
+}
+
+https://{$STAGING_IP}:3443 {
+	tls internal
+	reverse_proxy san-uptime:80
+}
+
+https://{$STAGING_HOST}:3443 {
+	reverse_proxy san-uptime:80
+}
+
+https://{$STAGING_IP}:3444 {
+	tls internal
+	reverse_proxy san-uptime-dino:80
+}
+
+https://{$STAGING_HOST}:3444 {
+	reverse_proxy san-uptime-dino:80
+}
+
+https://{$STAGING_IP}:3445 {
+	tls internal
+	reverse_proxy capa1:4173
+}
+
+https://{$STAGING_HOST}:3445 {
+	reverse_proxy capa1:4173
+}
+
+# Link Partner: endpoint público integrado a la red Docker del Hub.
+https://{$STAGING_HOST}:3446 {
+	encode zstd gzip
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy link-partner-api:3000
+	}
+
+	handle {
+		reverse_proxy link-partner-web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+http://{$STAGING_IP} {
+	redir https://{host}:{$FRONTEND_PORT}{uri} permanent
+}
+
+http://{$STAGING_HOST} {
+	handle /caddy-root.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Disposition "attachment; filename=caddy-root.crt"
+		header Content-Type "application/x-x509-ca-cert"
+		file_server
+	}
+
+	handle {
+		redir https://{$STAGING_HOST}:{$FRONTEND_PORT}{uri} permanent
+	}
+}

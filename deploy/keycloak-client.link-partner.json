@@ -1,0 +1,39 @@
+{
+  "clientId": "link-partner-frontend",
+  "name": "Link Partner",
+  "description": "Cliente público OIDC de Link Partner en Application Hub staging.",
+  "enabled": true,
+  "publicClient": true,
+  "protocol": "openid-connect",
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "rootUrl": "https://ai-stg-node02.serv.net.mx:3446",
+  "baseUrl": "/",
+  "adminUrl": "https://ai-stg-node02.serv.net.mx:3446",
+  "redirectUris": [
+    "https://ai-stg-node02.serv.net.mx:3446/callback"
+  ],
+  "webOrigins": [
+    "https://ai-stg-node02.serv.net.mx:3446"
+  ],
+  "attributes": {
+    "pkce.code.challenge.method": "S256",
+    "post.logout.redirect.uris": "https://ai-stg-node02.serv.net.mx:3446/*"
+  },
+  "protocolMappers": [
+    {
+      "name": "link-partner-audience",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper",
+      "consentRequired": false,
+      "config": {
+        "included.client.audience": "link-partner-frontend",
+        "id.token.claim": "false",
+        "access.token.claim": "true",
+        "introspection.token.claim": "true"
+      }
+    }
+  ]
+}

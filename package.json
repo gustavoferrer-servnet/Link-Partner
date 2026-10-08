@@ -1,0 +1,18 @@
+{
+  "name": "link-partner",
+  "version": "0.1.1",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@link-partner/web",
+    "dev:api": "npm run dev --workspace=@link-partner/api",
+    "build": "npm run build --workspace=@link-partner/api && npm run build --workspace=@link-partner/web",
+    "check": "npm run check --workspace=@link-partner/api && npm run check --workspace=@link-partner/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "slug": "link-partner",
+  "name": "Link Partner",
+  "shortDescription": "Opera conectividad on-net y off-net con cobertura, proveedores, SLA y seguimiento de entrega.",
+  "description": "Plataforma para publicar, cotizar, adjudicar y entregar enlaces mediante la cascada Red Servnet, proveedores gestionados y marketplace.",
+  "category": "operations",
+  "subcategory": "connectivity-sourcing",
+  "tags": ["conectividad", "carriers", "proveedores", "service-delivery"],
+  "accentColor": "#B5502F",
+  "lifecycle": "beta",
+  "visibility": "private"
+}

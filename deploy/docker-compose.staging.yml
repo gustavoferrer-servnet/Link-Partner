@@ -1,0 +1,104 @@
+name: link-partner-staging
+
+services:
+  link-partner-data-init:
+    image: link-partner-api:${LINK_PARTNER_VERSION:-0.1.1}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1000:1000 /app/data"]
+    volumes:
+      - link-partner-data:/app/data
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+  link-partner-api:
+    image: link-partner-api:${LINK_PARTNER_VERSION:-0.1.1}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      link-partner-data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AUTH_MODE: oidc
+      DATA_BACKEND: ${DATA_BACKEND:-firestore}
+      DATA_FILE_PATH: ${DATA_FILE_PATH:-/app/data/link-partner-state.json}
+      KEYCLOAK_AUTHORITY: ${KEYCLOAK_AUTHORITY:?KEYCLOAK_AUTHORITY is required}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-link-partner-frontend}
+      CORS_ORIGINS: https://${LINK_PARTNER_HOST:?LINK_PARTNER_HOST is required}:${LINK_PARTNER_HTTPS_PORT:-3446}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?GOOGLE_CLOUD_PROJECT is required}
+      FIRESTORE_DATABASE_ID: ${FIRESTORE_DATABASE_ID:-(default)}
+      BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy-data:/caddy-data:ro
+      - link-partner-data:/app/data
+    extra_hosts:
+      - "ai-stg-node02.serv.net.mx:host-gateway"
+    networks:
+      - app-hub
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  link-partner-web:
+    image: link-partner-web:${LINK_PARTNER_VERSION:-0.1.1}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_AUTH_MODE: oidc
+        VITE_DATA_MODE: api
+        VITE_API_URL: /api/v1
+        VITE_OIDC_AUTHORITY: ${KEYCLOAK_AUTHORITY:?KEYCLOAK_AUTHORITY is required}
+        VITE_OIDC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-link-partner-frontend}
+        VITE_HUB_URL: ${APP_HUB_URL:?APP_HUB_URL is required}
+    restart: unless-stopped
+    depends_on:
+      link-partner-api:
+        condition: service_healthy
+    networks:
+      - app-hub
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+
+  link-partner-edge:
+    image: alpine/socat:latest
+    restart: unless-stopped
+    depends_on:
+      link-partner-web:
+        condition: service_healthy
+    command:
+      - TCP-LISTEN:3446,fork,reuseaddr
+      - TCP:caddy:3446
+    ports:
+      - "${LINK_PARTNER_HTTPS_PORT:-3446}:3446"
+    networks:
+      - app-hub
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  app-hub:
+    external: true
+    name: ${APP_HUB_NETWORK:-app-hub-staging_default}
+
+volumes:
+  caddy-data:
+    external: true
+    name: ${APP_HUB_CADDY_DATA_VOLUME:-app-hub-staging_caddy_data}
+  link-partner-data:
+    name: link-partner-staging_data

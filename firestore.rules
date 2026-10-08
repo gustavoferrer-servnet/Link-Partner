@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Link Partner only accesses Firestore through its authenticated backend.
+    // Firebase client access is denied even if a browser bundle is compromised.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

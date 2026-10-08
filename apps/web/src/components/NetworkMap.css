@@ -1,0 +1,170 @@
+.network-map {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #dce2dd;
+  box-shadow: var(--shadow);
+}
+
+.network-map__leaflet {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #dce2dd;
+}
+
+.network-map__toolbar {
+  position: absolute;
+  z-index: 500;
+  inset: 12px 12px auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.map-search,
+.map-source,
+.map-layer-count {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(55, 55, 50, .2);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 253, 248, .96);
+  box-shadow: 0 5px 18px rgba(34, 28, 20, .12);
+  pointer-events: auto;
+}
+
+.map-search {
+  width: min(440px, 52vw);
+  padding-left: 12px;
+}
+
+.map-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.map-search button {
+  align-self: stretch;
+  padding: 0 13px;
+  border: 0;
+  border-left: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--terracotta);
+  font: 650 11px var(--font-display);
+}
+
+.map-search__spinner,
+.network-map__loading svg {
+  animation: map-spin 800ms linear infinite;
+}
+
+.map-source,
+.map-layer-count {
+  padding: 0 11px;
+  color: var(--text-muted);
+  font: 600 10px var(--font-mono);
+  white-space: nowrap;
+}
+
+.network-map__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.network-map__empty {
+  position: absolute;
+  z-index: 450;
+  left: 50%;
+  top: 50%;
+  width: min(340px, calc(100% - 40px));
+  display: grid;
+  gap: 5px;
+  padding: 13px 16px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(55, 55, 50, .16);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 253, 248, .92);
+  box-shadow: 0 8px 24px rgba(34, 28, 20, .12);
+  text-align: center;
+  pointer-events: none;
+}
+
+.network-map__empty strong { font: 650 13px var(--font-display); }
+.network-map__empty span { color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+
+.network-map__notice {
+  position: absolute;
+  z-index: 500;
+  left: 12px;
+  bottom: 28px;
+  max-width: calc(100% - 24px);
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: white;
+  font-size: 11px;
+}
+
+.network-map__notice--error { background: var(--danger); }
+
+.network-map .leaflet-control-zoom {
+  margin-right: 12px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(55, 55, 50, .2);
+  box-shadow: 0 5px 18px rgba(34, 28, 20, .1);
+}
+
+.network-map .leaflet-control-zoom a {
+  color: var(--ink);
+  background: rgba(255, 253, 248, .96);
+}
+
+.network-map .leaflet-control-attribution {
+  padding: 3px 7px;
+  background: rgba(255, 253, 248, .9);
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.network-map .leaflet-tooltip {
+  max-width: 280px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font: 600 10px var(--font-body);
+  white-space: normal;
+}
+
+.network-map--compact { min-height: 270px; }
+.network-map--compact .leaflet-control-attribution { display: none; }
+
+@keyframes map-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .network-map { min-height: 440px; }
+  .network-map__toolbar { align-items: stretch; flex-wrap: wrap; }
+  .map-search { width: 100%; }
+  .map-source, .map-layer-count { min-height: 32px; }
+  .network-map__empty { top: 56%; }
+}
