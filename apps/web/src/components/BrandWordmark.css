@@ -1,0 +1,10 @@
+.brand-wordmark {
+  display: inline-block;
+  color: var(--ink);
+  font: 800 24px/1.1 var(--font-body);
+  letter-spacing: -.8px;
+  white-space: nowrap;
+}
+.brand-wordmark > span { color: var(--brand-partner); }
+.brand-wordmark__suffix { font-weight: 700; letter-spacing: -.5px; }
+.brand-wordmark--compact { display: none; }

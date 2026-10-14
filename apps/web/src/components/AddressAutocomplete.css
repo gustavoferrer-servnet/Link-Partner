@@ -1,0 +1,19 @@
+.address-autocomplete { position: relative; min-width: 0; width: 100%; }
+.address-autocomplete > input { width: 100%; box-sizing: border-box; }
+.address-autocomplete__dropdown { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 900; border: 1px solid #d7d4ce; border-radius: 12px; background: #fff; box-shadow: 0 12px 32px #18181526; overflow: hidden; color: #242421; }
+.address-autocomplete__dropdown [role=listbox] { max-height: min(360px, 45vh); overflow-y: auto; overscroll-behavior: contain; }
+.address-autocomplete__option { display: flex; align-items: flex-start; gap: 12px; padding: 13px 14px; border-bottom: 1px solid #efeee9; cursor: pointer; text-align: left; min-height: 48px; box-sizing: border-box; }
+.address-autocomplete__option:hover, .address-autocomplete__option.is-active { background: #f5eee6; }
+.address-autocomplete__option svg { flex-shrink: 0; margin-top: 2px; color: #b64c2b; }
+.address-autocomplete__option span { display: grid; gap: 4px; min-width: 0; }
+.address-autocomplete__option strong { font-size: 13px; line-height: 1.45; font-weight: 550; overflow-wrap: anywhere; }
+.address-autocomplete__option small { font-size: 11px; color: #75756e; }
+.address-autocomplete__dropdown p { padding: 12px 14px; margin: 0; font-size: 12px; }
+.address-autocomplete__credit { display: block; padding: 6px 14px; font-size: 9px; color: #75756e; }
+.map-search .address-autocomplete { flex: 1; }
+.map-search .address-autocomplete > input { min-height: 38px; }
+
+.address-autocomplete__credit { font-size: 12px; font-weight: 400; color: #5e5e5e; white-space: nowrap; text-align: left; }
+
+button.address-autocomplete__option { width: 100%; background: white; color: inherit; border: 0; border-bottom: 1px solid #efeee9; border-radius: 0; padding: 13px 14px; font: inherit; touch-action: pan-y; }
+button.address-autocomplete__option:hover, button.address-autocomplete__option.is-active { background: #f5eee6; }

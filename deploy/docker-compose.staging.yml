@@ -34,6 +34,9 @@ services:
       CORS_ORIGINS: https://${LINK_PARTNER_HOST:?LINK_PARTNER_HOST is required}:${LINK_PARTNER_HTTPS_PORT:-3446}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?GOOGLE_CLOUD_PROJECT is required}
       FIRESTORE_DATABASE_ID: ${FIRESTORE_DATABASE_ID:-(default)}
+      GEOCODING_URL: ${GEOCODING_URL:-https://nominatim.openstreetmap.org}
+      GEOCODING_USER_AGENT: ${GEOCODING_USER_AGENT:-LinkPartner-CX/0.2 address-validation}
+      GEOCODING_SIGNING_SECRET: ${GEOCODING_SIGNING_SECRET:-}
       BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
       NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
     volumes:

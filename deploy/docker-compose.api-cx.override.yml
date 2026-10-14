@@ -1,0 +1,23 @@
+services:
+  link-partner-api:
+    image: link-partner-api:0.3.0-cx
+    environment:
+      CX_MAIL_FROM: ${CX_MAIL_FROM:-}
+      CX_PUBLIC_URL: ${CX_PUBLIC_URL:-https://ai-stg-node02.serv.net.mx:8081/cx}
+      SMTP_HOST: ${SMTP_HOST:-smtp-relay.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ADDRESS_SEARCH_PROVIDER: ${ADDRESS_SEARCH_PROVIDER:-google}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
+      ADDRESS_AUTOCOMPLETE_URL: ${ADDRESS_AUTOCOMPLETE_URL:-https://photon.komoot.io}
+      GEOCODING_URL: ${GEOCODING_URL:-https://nominatim.openstreetmap.org}
+      GEOCODING_USER_AGENT: ${GEOCODING_USER_AGENT:-LinkPartner-CX/0.3 address-validation}
+      GEOCODING_SIGNING_SECRET: ${GEOCODING_SIGNING_SECRET:?A persistent signing secret is required}
+      HUB_API_URL: ${HUB_API_URL:-}
+      HUB_APPLICATION_SLUG: ${HUB_APPLICATION_SLUG:-link-partner}
+      HUB_DEPLOYMENT_ID: ${HUB_DEPLOYMENT_ID:-}
+      HUB_INTERNAL_TENANT_SLUG: ${HUB_INTERNAL_TENANT_SLUG:-}
+  link-partner-web:
+    image: link-partner-web:0.3.0-cx

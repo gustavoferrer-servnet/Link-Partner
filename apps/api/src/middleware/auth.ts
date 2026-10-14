@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { seedUser } from '../data/seed.js';
 import { repository } from '../repositories/index.js';
 import type { AppRole, AuthenticatedRequest, Identity } from '../types.js';
+import { HubAccessError, hubOrganization } from '../services/hubAccess.js';
 
 const jwks = createRemoteJWKSet(new URL(`${config.keycloakAuthority}/protocol/openid-connect/certs`));
 
@@ -78,6 +79,17 @@ export async function loadAppUser(req: AuthenticatedRequest, res: Response, next
       };
     }
 
+    if (user && !user.enabled) {
+      res.status(403).json({ status: 'error', message: 'Tu cuenta está deshabilitada en Link Partner.' });
+      return;
+    }
+    if (config.authMode === 'oidc' && config.hubApiUrl && !config.bootstrapAdminEmails.has(req.identity.email.toLowerCase())) {
+      const organization = await hubOrganization(req.identity, req.headers.authorization!);
+      // Grant read access only after Hub verifies the assigned instance and internal tenant.
+      // A Hub administrator is not automatically a Link Partner administrator.
+      user ??= { ...req.identity, organization, participantId: null, roles: ['viewer'], enabled: true };
+    }
+
     if (!user || !user.enabled) {
       res.status(403).json({ status: 'error', message: 'Tu cuenta no está habilitada en Link Partner.' });
       return;
@@ -86,6 +98,7 @@ export async function loadAppUser(req: AuthenticatedRequest, res: Response, next
     req.appUser = user;
     next();
   } catch (error) {
+    if (error instanceof HubAccessError) { res.status(error.status).json({ status: 'error', message: error.message }); return; }
     next(error);
   }
 }

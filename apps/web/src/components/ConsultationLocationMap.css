@@ -1,0 +1,8 @@
+.consultation-location-map { min-width: 0; margin: 24px 0; }
+.consultation-location-map .network-map { min-height: 320px; box-shadow: none; }
+.consultation-location-map p { margin: 12px 0 4px; overflow-wrap: anywhere; }
+.consultation-location-map small { color: var(--text-muted); }
+.consultation-location-map .leaflet-control-attribution { display: block; }
+.consultation-location-map .leaflet-tooltip { width: min(220px, 60vw); max-width: 220px; box-sizing: border-box; overflow-wrap: anywhere; text-align: center; }
+.consultation-location-pin { background: none; border: 0; }
+@media (max-width: 760px) { .consultation-location-map .network-map { min-height: 270px; } }

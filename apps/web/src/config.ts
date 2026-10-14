@@ -10,6 +10,8 @@ const defaultOidcAuthority = isDevelopment
   : `${publicProtocol}//${publicHost}:8443/realms/application-hub`;
 
 export const config = {
+  appSurface: env.VITE_APP_SURFACE || 'operations',
+  operationsUrl: env.VITE_OPERATIONS_URL || '/',
   apiUrl: env.VITE_API_URL || '/api/v1',
   authMode: env.VITE_AUTH_MODE || (isDevelopment ? 'development' : 'oidc'),
   dataMode: env.VITE_DATA_MODE || (isDevelopment ? 'demo' : 'api'),
@@ -18,6 +20,8 @@ export const config = {
     authority: env.VITE_OIDC_AUTHORITY || defaultOidcAuthority,
     client_id: env.VITE_OIDC_CLIENT_ID || 'link-partner-frontend',
     redirect_uri: `${window.location.origin}/callback`,
+    silent_redirect_uri: `${window.location.origin}/callback`,
+    silentRequestTimeoutInSeconds: 8,
     post_logout_redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'openid profile email',

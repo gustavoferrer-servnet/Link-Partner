@@ -45,7 +45,7 @@ export function DeliveriesPage() {
   return (
     <div className="page section-stack delivery-portfolio">
       <header className="page-header">
-        <div className="page-header__copy"><h1>Service Delivery</h1><p>CARTERA · ACTIVIDADES · GANTT · DESVÍOS · EVIDENCIAS · CIERRES</p></div>
+        <div className="page-header__copy"><h1>Service Delivery Office</h1><p>CARTERA · ACTIVIDADES · GANTT · DESVÍOS · EVIDENCIAS · CIERRES</p></div>
         <div className="page-header__actions"><span className="sync-note"><CalendarClock size={15} /> WSAS: adaptador simulado</span></div>
       </header>
 
@@ -66,7 +66,7 @@ export function DeliveriesPage() {
           <span>{filtered.length} proyectos</span>
         </div>
         {projectsQuery.isLoading ? <div className="empty-note">Cargando cartera operativa…</div> : projectsQuery.isError ? <div className="empty-note text-danger">No fue posible consultar Service Delivery.</div> : (
-          <div className="table-wrap"><table className="data-table delivery-table"><thead><tr><th>Proyecto / cliente</th><th>Referencias</th><th>Flujo</th><th>Responsable</th><th>Etapa</th><th>Compromiso</th><th>Pronóstico</th><th>Calendario</th><th>Próxima acción</th><th /></tr></thead><tbody>{filtered.map((project) => (
+          <div className="table-wrap"><table className="data-table delivery-table"><thead><tr><th>Proyecto / cliente</th><th>Referencias</th><th>Flujo</th><th>Delivery Manager</th><th>Etapa</th><th>Compromiso</th><th>Pronóstico</th><th>Calendario</th><th>Próxima acción</th><th /></tr></thead><tbody>{filtered.map((project) => (
             <tr key={project.id} tabIndex={0} onClick={() => navigate(`/deliveries/${project.id}`)} onKeyDown={(event) => event.key === 'Enter' && navigate(`/deliveries/${project.id}`)}>
               <td><strong>{project.id}</strong><small>{project.client} · {project.site}</small></td>
               <td><code>{project.opportunityId}</code><small>{project.externalRefs.wsasRequestId || 'Sin ticket WSAS'}</small></td>

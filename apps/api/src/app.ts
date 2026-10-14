@@ -3,6 +3,8 @@ import express from 'express';
 import helmet from 'helmet';
 import { config } from './config.js';
 import { errorHandler, notFound } from './middleware/errors.js';
+import { customerRouter } from './routes/customers.js';
+import { cxRouter } from './routes/cx.js';
 import { apiRouter } from './routes/index.js';
 
 export const app = express();
@@ -19,8 +21,10 @@ app.use(cors({
 app.use(express.json({ limit: '30mb' }));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'link-partner-api', version: '0.2.0' });
+  res.json({ status: 'ok', service: 'link-partner-api', version: '0.3.0' });
 });
+app.use('/api/v1/customers', customerRouter);
+app.use('/api/v1', cxRouter);
 app.use('/api/v1', apiRouter);
 app.use(notFound);
 app.use(errorHandler);

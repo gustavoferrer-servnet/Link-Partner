@@ -7,14 +7,14 @@ import {
   Handshake,
   Home,
   Map,
-  Plus,
   Settings,
   Truck,
 } from 'lucide-react';
 import { useEffect } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { config } from '../../config';
 import { useSession } from '../../auth/SessionContext';
+import { BrandWordmark } from '../BrandWordmark';
 import './AppShell.css';
 
 const navItems = [
@@ -22,23 +22,12 @@ const navItems = [
   { to: '/opportunities', label: 'Oportunidades', icon: Handshake },
   { to: '/coverage', label: 'Cobertura', icon: Map },
   { to: '/suppliers', label: 'Proveedores', icon: Building2 },
-  { to: '/deliveries', label: 'Service Delivery', icon: Truck },
+  { to: '/deliveries', label: 'Service Delivery Office', icon: Truck },
   { to: '/profitability', label: 'Inteligencia', icon: BarChart3 },
   { to: '/admin', label: 'Administración', icon: Settings },
 ];
 
-function LinkPartnerMark() {
-  return (
-    <div className="brand-mark" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
-  );
-}
-
 export function AppShell() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
 
@@ -49,10 +38,10 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="sidebar__brand">
-          <LinkPartnerMark />
-          <strong>Link<br />Partner</strong>
-        </div>
+        <Link to="/" className="sidebar__brand" aria-label="linkpartner · Inicio">
+          <BrandWordmark />
+          <BrandWordmark compact />
+        </Link>
 
         <nav className="sidebar__nav" aria-label="Navegación principal">
           {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -86,10 +75,10 @@ export function AppShell() {
             <span><strong>{user.displayName}</strong><small>Operaciones</small></span>
             <ChevronDown size={15} />
           </div>
-          <button className="button button--primary topbar__new" type="button" onClick={() => navigate('/opportunities?create=1')}>
-            <Plus size={17} />
-            <span>Nueva oportunidad</span>
-          </button>
+          <Link className="button button--primary topbar__cx" to="/cx">
+            <CircleUserRound size={17} aria-hidden="true" />
+            <span>Link Partner CX</span>
+          </Link>
         </header>
 
         <main className="app-main">

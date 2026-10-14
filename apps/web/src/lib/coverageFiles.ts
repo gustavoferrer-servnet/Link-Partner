@@ -56,10 +56,6 @@ export interface SupplierCoverageClassification {
   visibleLayerCount: number;
 }
 
-export const ON_NET_MAX_DISTANCE_METERS = 500;
-export const NEAR_NET_MAX_DISTANCE_METERS = 1_500;
-const NEAR_NET_STANDARD_MAX_DISTANCE_METERS = 1_000;
-const EARTH_RADIUS_METERS = 6_371_008.8;
 
 function addGeometryCount(counts: CoverageGeometryCounts, geometry: Geometry | null) {
   if (!geometry) return;
@@ -309,8 +305,41 @@ export function coverageSourceLayers(source: CoverageSource): CoverageLayer[] {
     data: { type: 'FeatureCollection', features: group.features },
     featureCount: group.features.length,
     polygonCount: group.features.reduce((total, feature) => total + countGeometryPolygons(feature.geometry), 0),
-    visible: true,
+    visible: !isPoPLayer({ name: group.path.at(-1) || FALLBACK_LAYER_NAME, path: group.path, sourceFileName: source.sourceFileName, data: { type: 'FeatureCollection', features: group.features } }),
   }));
+}
+
+export function isPoPLayer(layer: Pick<CoverageLayer, 'name' | 'path' | 'sourceFileName' | 'data'>) {
+  const labels = [layer.name, ...(layer.path ?? []), layer.sourceFileName ?? ''].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  return /\b(pops?|puntos? de presencia|points? of presence)\b/.test(labels)
+    || layer.data.features.some(feature => Object.keys(feature.properties ?? {}).some(key => /^(pop[ _-]?name|nombre[ _-]?pop|nombre[ _-]?nodo|site[ _-]?name)$/i.test(key)));
+}
+
+// KML can embed an invisible label point beside coverage polygons in a
+// GeometryCollection. Google Data ignores KML icon-opacity, so omit those
+// points from the display only; keep the original geometry for calculations.
+export function coverageDisplayData(data: FeatureCollection): FeatureCollection {
+  function withoutPoints(geometry: Geometry | null): Geometry | null {
+    if (!geometry || geometry.type === 'Point' || geometry.type === 'MultiPoint') return null;
+    if (geometry.type !== 'GeometryCollection') return geometry;
+    const geometries = geometry.geometries.flatMap(item => {
+      const visible = withoutPoints(item);
+      return visible ? [visible] : [];
+    });
+    if (geometries.length === 0) return null;
+    return geometries.every((item, index) => item === geometry.geometries[index]) && geometries.length === geometry.geometries.length
+      ? geometry : { ...geometry, geometries };
+  }
+
+  const features = data.features.flatMap(feature => {
+    const opacity = feature.properties?.['icon-opacity'];
+    const scale = feature.properties?.['icon-scale'];
+    if (!((opacity != null && Number(opacity) === 0) || (scale != null && Number(scale) === 0))) return [feature];
+    const geometry = withoutPoints(feature.geometry);
+    return geometry ? [geometry === feature.geometry ? feature : { ...feature, geometry }] : [];
+  });
+  return features.length === data.features.length && features.every((feature, index) => feature === data.features[index])
+    ? data : { ...data, features };
 }
 
 function pointInRing(lng: number, lat: number, ring: Position[]) {
@@ -342,151 +371,6 @@ function geometryContainsPoint(geometry: Geometry | null, location: MapLocation)
     return geometry.geometries.some((item) => geometryContainsPoint(item, location));
   }
   return false;
-}
-
-function projectedPositionDistanceMeters(position: Position, location: MapLocation) {
-  const lng = Number(position[0]);
-  const lat = Number(position[1]);
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return Number.POSITIVE_INFINITY;
-  const radians = Math.PI / 180;
-  const x = (lng - location.lng) * radians * EARTH_RADIUS_METERS * Math.cos(location.lat * radians);
-  const y = (lat - location.lat) * radians * EARTH_RADIUS_METERS;
-  return Math.hypot(x, y);
-}
-
-function segmentDistanceMeters(start: Position, end: Position, location: MapLocation) {
-  const radians = Math.PI / 180;
-  const metersPerDegree = radians * EARTH_RADIUS_METERS;
-  const longitudeScale = metersPerDegree * Math.cos(location.lat * radians);
-  const startX = (Number(start[0]) - location.lng) * longitudeScale;
-  const startY = (Number(start[1]) - location.lat) * metersPerDegree;
-  const endX = (Number(end[0]) - location.lng) * longitudeScale;
-  const endY = (Number(end[1]) - location.lat) * metersPerDegree;
-  if (![startX, startY, endX, endY].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
-
-  const deltaX = endX - startX;
-  const deltaY = endY - startY;
-  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
-  if (lengthSquared === 0) return Math.hypot(startX, startY);
-  const projection = Math.max(0, Math.min(1, -(startX * deltaX + startY * deltaY) / lengthSquared));
-  return Math.hypot(startX + projection * deltaX, startY + projection * deltaY);
-}
-
-function lineDistanceMeters(coordinates: Position[], location: MapLocation, closed = false) {
-  if (coordinates.length === 0) return Number.POSITIVE_INFINITY;
-  if (coordinates.length === 1) return projectedPositionDistanceMeters(coordinates[0], location);
-
-  let minimum = Number.POSITIVE_INFINITY;
-  for (let index = 1; index < coordinates.length; index += 1) {
-    minimum = Math.min(minimum, segmentDistanceMeters(coordinates[index - 1], coordinates[index], location));
-  }
-  if (closed) minimum = Math.min(minimum, segmentDistanceMeters(coordinates.at(-1)!, coordinates[0], location));
-  return minimum;
-}
-
-function geometryDistanceMeters(geometry: Geometry | null, location: MapLocation): number {
-  if (!geometry) return Number.POSITIVE_INFINITY;
-  if (geometryContainsPoint(geometry, location)) return 0;
-
-  if (geometry.type === 'Point') return projectedPositionDistanceMeters(geometry.coordinates, location);
-  if (geometry.type === 'MultiPoint') {
-    return geometry.coordinates.reduce((minimum, point) => Math.min(minimum, projectedPositionDistanceMeters(point, location)), Number.POSITIVE_INFINITY);
-  }
-  if (geometry.type === 'LineString') return lineDistanceMeters(geometry.coordinates, location);
-  if (geometry.type === 'MultiLineString') {
-    return geometry.coordinates.reduce((minimum, line) => Math.min(minimum, lineDistanceMeters(line, location)), Number.POSITIVE_INFINITY);
-  }
-  if (geometry.type === 'Polygon') {
-    return geometry.coordinates.reduce((minimum, ring) => Math.min(minimum, lineDistanceMeters(ring, location, true)), Number.POSITIVE_INFINITY);
-  }
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.reduce((polygonMinimum, polygon) => Math.min(
-      polygonMinimum,
-      polygon.reduce((ringMinimum, ring) => Math.min(ringMinimum, lineDistanceMeters(ring, location, true)), Number.POSITIVE_INFINITY),
-    ), Number.POSITIVE_INFINITY);
-  }
-  if (geometry.type === 'GeometryCollection') {
-    return geometry.geometries.reduce((minimum, item) => Math.min(minimum, geometryDistanceMeters(item, location)), Number.POSITIVE_INFINITY);
-  }
-  return Number.POSITIVE_INFINITY;
-}
-
-function isServnetSupplier(supplierId: string, supplierName: string) {
-  const normalizedId = supplierId.trim().toLocaleLowerCase('es-MX');
-  const normalizedName = supplierName.trim().toLocaleLowerCase('es-MX');
-  return normalizedId === 'sup-servnet' || normalizedName === 'servnet' || normalizedName === 'red servnet';
-}
-
-export function classifyCoverageBySupplier(layers: CoverageLayer[], location: MapLocation) {
-  const groups = new Map<string, CoverageLayer[]>();
-  for (const layer of layers) {
-    const supplierId = layer.supplierId || layer.supplierName || 'supplier';
-    const group = groups.get(supplierId);
-    if (group) group.push(layer);
-    else groups.set(supplierId, [layer]);
-  }
-
-  return Array.from(groups.entries()).map(([supplierId, supplierLayers]): SupplierCoverageClassification => {
-    const visibleLayers = supplierLayers.filter((layer) => layer.visible);
-    const supplierName = supplierLayers[0]?.supplierName || 'Proveedor';
-    const color = supplierLayers[0]?.color || COVERAGE_COLORS[0];
-    if (visibleLayers.length === 0) {
-      return {
-        supplierId,
-        supplierName,
-        color,
-        classification: 'disabled',
-        policyLevel: 'Sin evaluar',
-        distanceMeters: null,
-        layerName: null,
-        sourceFileName: null,
-        visibleLayerCount: 0,
-      };
-    }
-
-    let distanceMeters = Number.POSITIVE_INFINITY;
-    let nearestLayer: CoverageLayer | null = null;
-    for (const layer of visibleLayers) {
-      for (const feature of layer.data.features) {
-        const candidateDistance = geometryDistanceMeters(feature.geometry, location);
-        if (candidateDistance < distanceMeters) {
-          distanceMeters = candidateDistance;
-          nearestLayer = layer;
-        }
-      }
-    }
-
-    const finiteDistance = Number.isFinite(distanceMeters) ? distanceMeters : null;
-    const classification: CoverageBusinessClassification = finiteDistance !== null && finiteDistance <= ON_NET_MAX_DISTANCE_METERS
-      ? 'on-net'
-      : finiteDistance !== null && finiteDistance <= NEAR_NET_MAX_DISTANCE_METERS
-        ? 'near-net'
-        : 'off-net';
-    const policyLevel = classification === 'on-net'
-      ? 'On-net'
-      : classification === 'near-net' && finiteDistance !== null && finiteDistance <= NEAR_NET_STANDARD_MAX_DISTANCE_METERS
-        ? 'Near-net'
-        : classification === 'near-net'
-          ? 'Factibilidad'
-          : 'Fuera de cobertura';
-
-    return {
-      supplierId,
-      supplierName,
-      color,
-      classification,
-      policyLevel,
-      distanceMeters: finiteDistance,
-      layerName: nearestLayer?.name ?? null,
-      sourceFileName: nearestLayer?.sourceFileName ?? null,
-      visibleLayerCount: visibleLayers.length,
-    };
-  }).sort((left, right) => {
-    const leftIsServnet = isServnetSupplier(left.supplierId, left.supplierName);
-    const rightIsServnet = isServnetSupplier(right.supplierId, right.supplierName);
-    if (leftIsServnet !== rightIsServnet) return leftIsServnet ? -1 : 1;
-    return left.supplierName.localeCompare(right.supplierName, 'es-MX');
-  });
 }
 
 export function matchingCoverageLayers(layers: CoverageLayer[], location: MapLocation) {

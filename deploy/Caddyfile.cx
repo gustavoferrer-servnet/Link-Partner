@@ -1,0 +1,15 @@
+{
+    skip_install_trust
+    auto_https disable_redirects
+}
+
+https://ai-stg-node02.serv.net.mx:8081 {
+    encode zstd gzip
+    reverse_proxy link-partner-cx:8080
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+}

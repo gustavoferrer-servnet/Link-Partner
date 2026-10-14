@@ -1,0 +1,6 @@
+.cx-coverage-summary { margin-block: 1.5rem; }
+.cx-coverage-summary section { border-top: 1px solid var(--border, #dbe4ed); padding-block: 1rem; }
+.cx-anonymous-summary dl { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 1rem; }
+.cx-anonymous-summary dl > div { flex: 1 1 220px; padding: 1rem; background: #f3f7fa; border-radius: 8px; }
+.cx-anonymous-summary dt { font-weight: 700; margin-bottom: .5rem; }
+.cx-anonymous-summary dd { margin: .3rem 0; }

@@ -1,8 +1,12 @@
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { config } from './config';
+import { SessionProvider } from './auth/SessionContext';
 import { AppShell } from './components/layout/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
 import { OpportunitiesPage } from './pages/OpportunitiesPage';
+
+const CustomerExperiencePage = lazy(() => import('./pages/CustomerExperiencePage').then(module => ({ default: module.CustomerExperiencePage })));
 
 const OpportunityDetailPage = lazy(() => import('./pages/OpportunityDetailPage').then((module) => ({ default: module.OpportunityDetailPage })));
 const CoveragePage = lazy(() => import('./pages/CoveragePage').then((module) => ({ default: module.CoveragePage })));
@@ -17,9 +21,11 @@ function Deferred({ children }: { children: ReactNode }) {
 }
 
 export function App() {
+  if (config.appSurface === 'cx') return <Routes><Route path="*" element={<Deferred><CustomerExperiencePage /></Deferred>} /></Routes>;
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      <Route path="cx/*" element={<Deferred><CustomerExperiencePage /></Deferred>} />
+      <Route element={<SessionProvider><AppShell /></SessionProvider>}>
         <Route index element={<DashboardPage />} />
         <Route path="opportunities" element={<OpportunitiesPage />} />
         <Route path="opportunities/:id" element={<Deferred><OpportunityDetailPage /></Deferred>} />

@@ -99,7 +99,7 @@ function LayerNode({
 }
 
 export function CoverageLayerTree({ coverages, hiddenLayerIds, compact = false, onToggleLayerIds }: CoverageLayerTreeProps) {
-  const [collapsedSupplierIds, setCollapsedSupplierIds] = useState<Set<string>>(() => new Set());
+  const [expandedSupplierIds, setExpandedSupplierIds] = useState<Set<string>>(() => new Set());
   const suppliers = useMemo(() => {
     const groups = new Map<string, Omit<SupplierCoverageGroup, 'tree'>>();
 
@@ -135,7 +135,7 @@ export function CoverageLayerTree({ coverages, hiddenLayerIds, compact = false, 
   }, [coverages]);
 
   function toggleSupplierCollapsed(coverageId: string) {
-    setCollapsedSupplierIds((current) => {
+    setExpandedSupplierIds((current) => {
       const next = new Set(current);
       if (next.has(coverageId)) next.delete(coverageId);
       else next.add(coverageId);
@@ -150,7 +150,7 @@ export function CoverageLayerTree({ coverages, hiddenLayerIds, compact = false, 
         const visibleCount = layerIds.filter((id) => !hiddenLayerIds.has(id)).length;
         const visible = visibleCount > 0;
         const fullyVisible = visibleCount === layerIds.length;
-        const collapsed = collapsedSupplierIds.has(supplierId);
+        const collapsed = !expandedSupplierIds.has(supplierId);
         const nodesId = `coverage-tree-${supplierId}`;
         return (
           <section className="coverage-tree__supplier" key={supplierId}>

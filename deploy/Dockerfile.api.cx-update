@@ -1,0 +1,5 @@
+# Same runtime dependencies as the validated staging API; update application code only.
+FROM link-partner-api:0.2.0
+COPY node_modules/nodemailer /app/node_modules/nodemailer
+COPY apps/api/package.json /app/package.json
+COPY apps/api/dist /app/dist

@@ -1,0 +1,21 @@
+.supplier-management { width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; background: var(--surface, #fff); color: var(--text, #172b4d); border-radius: 14px; box-shadow: 0 20px 80px #0003; }
+.management-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 20px; border-bottom: 1px solid #dce3ea; }
+.management-body { padding: 20px; overflow-y: auto; }
+.management-body fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.management-body label { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.management-body label:has(input[type=checkbox]) { flex-direction: row; align-items: center; }
+.management-form-grid, .management-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.management-record, .management-summary article { border: 1px solid #dce3ea; border-radius: 10px; padding: 16px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.management-body h3 { margin: 18px 0 10px; }
+.management-body p { margin: 10px 0 16px; line-height: 1.5; }
+.management-body textarea { min-height: 90px; }
+.manager-inbox { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 20px; }
+.manager-inbox button { text-align: left; white-space: normal; height: auto; display: block; padding: 14px; }
+.manager-inbox button small { display: block; margin-top: 8px; }
+@media (max-width: 650px) { .management-form-grid, .management-summary { grid-template-columns: 1fr; } .management-body { padding: 14px; } .management-tabs { gap: 6px; padding: 12px; } }
+.management-body > section[hidden] { display: none; }
+.management-save-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.management-save-bar span { font-size: 13px; color: var(--text-muted); }
+.management-close-warning { border: 1px solid var(--amber); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+.management-close-warning .button { margin: 4px; }
+@media (max-width: 650px) { .management-save-bar { padding: 12px; flex-wrap: wrap; } }

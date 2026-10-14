@@ -1,0 +1,2678 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Link Partner API — CX y cobertura",
+    "version": "0.3.1",
+    "description": "CX es un consumidor del API Link Partner. El endpoint autenticado de cobertura y la orquestación digital comparten repositorio y motor. Integración de proveedores prevista: requiere identidades/scopes/quotas aprobados; hoy coverage/check sólo admite roles internos. Resultados por MW y FO con distancias independientes. Coberturas sin tecnología especificada se consideran FO. La prefactibilidad no confirma capacidad ni instalación; MW requiere línea de vista. MW sólo es prefactible dentro de un polígono de microonda: la distancia al PoP no sustituye esa validación. La distancia a PoPs es geodésica en línea recta; se muestran hasta 5 puntos adicionales dentro de cobertura y a 25 km del sitio. Los puntos sin nombre de PoP explícito se presentan como referencias de red, y los PoPs FO requieren validar capacidad MW. FO valida contención en los polígonos OnNet/NearNet del mapa: las distancias son informativas, sin umbrales. Cada carga genera una revisión y un evento atómicos con actor, fecha, huella SHA-256 y versión anterior. Las consultas guardan las revisiones utilizadas y no se recalculan al actualizar mapas. La actualización identifica el mapa a sustituir por coverageId y revisión esperada; el anterior se retira de los cálculos. La selección interna también exige revisionId y rechaza revisiones anteriores. Las vistas detectan cambios con un manifiesto ligero de mapas activos. CX devuelve exclusivamente resúmenes anónimos por servicio y localidad: cantidad de rutas, tecnología y distancia al PoP sin identidad. No publica nombres/IDs de proveedores, PoPs, mapas, versiones, archivos, coordenadas de red ni texto interno. La misma proyección aplica a consultas históricas, recuperación, historial, preferencias y correo. Link Partner interno conserva la evidencia completa sin recalcular ni modificar los resultados guardados."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/locations/validate": {
+      "post": {
+        "operationId": "validateInstallationAddress",
+        "summary": "Buscar y normalizar una dirección para confirmación explícita",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "address",
+                  "city"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 300
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Candidatos (vacío si no hay coincidencias); no crea oportunidad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LocationCandidate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dirección incompleta"
+          },
+          "429": {
+            "description": "Cuota local excedida"
+          },
+          "503": {
+            "description": "Geocodificador o firma no disponible"
+          }
+        }
+      }
+    },
+    "/coverage/check": {
+      "post": {
+        "operationId": "checkSupplierCoverage",
+        "summary": "Evaluar coberturas KML/KMZ registradas por proveedor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "latitude",
+                  "longitude"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "coverageSelection": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "description": "Opcional: evalúa sólo las features seleccionadas de revisiones vigentes. Cada elemento exige revisionId. Una revisión anterior, un mapa ausente o índices no vigentes producen 409; refresca /supplier-coverages. Omitir evalúa todos los mapas activos.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "featureIndexes",
+                        "revisionId"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "featureIndexes": {
+                          "type": "array",
+                          "maxItems": 100000,
+                          "items": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 1000000
+                          }
+                        },
+                        "revisionId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado preliminar; no confirma capacidad ni precio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Coverage"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "engine": {
+                              "const": "link-partner-supplier-coverage"
+                            },
+                            "policyVersion": {
+                              "const": "lp-map-v3"
+                            },
+                            "microwavePolicy": {
+                              "type": "object",
+                              "properties": {
+                                "feasibility": {
+                                  "const": "inside-polygon"
+                                },
+                                "popDistance": {
+                                  "const": "straight-line"
+                                },
+                                "nearbyPopRadiusMeters": {
+                                  "const": 25000
+                                },
+                                "maxNearbyPops": {
+                                  "const": 5
+                                }
+                              }
+                            },
+                            "fiberPolicy": {
+                              "type": "object",
+                              "properties": {
+                                "feasibility": {
+                                  "const": "inside-polygon"
+                                },
+                                "classification": {
+                                  "const": "map-label"
+                                },
+                                "distance": {
+                                  "const": "informational-only"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Coordenadas inválidas"
+          },
+          "401": {
+            "description": "Sin sesión válida"
+          },
+          "403": {
+            "description": "Rol no autorizado; proveedores aún no habilitados"
+          },
+          "429": {
+            "description": "Cuota local excedida"
+          },
+          "500": {
+            "description": "Repositorio no disponible"
+          },
+          "409": {
+            "description": "COVERAGE_REVISION_CONFLICT: el mapa fue sustituido; descargar mapas vigentes antes de calcular."
+          }
+        }
+      }
+    },
+    "/prefeasibility": {
+      "post": {
+        "operationId": "createDigitalConsultation",
+        "summary": "Validar de 1 a 10 localidades y registrar una consulta y oportunidad DIGITAL atómicamente",
+        "security": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "channel",
+                      "address",
+                      "city",
+                      "product",
+                      "capacityMbps",
+                      "locationToken",
+                      "latitude",
+                      "longitude",
+                      "company",
+                      "fullName",
+                      "email"
+                    ],
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "ENTERPRISE",
+                          "WHOLESALE"
+                        ]
+                      },
+                      "address": {
+                        "type": "string",
+                        "minLength": 5,
+                        "maxLength": 1000
+                      },
+                      "city": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 200,
+                        "description": "Ciudad obtenida de la dirección confirmada; no requiere captura manual en CX."
+                      },
+                      "product": {
+                        "enum": [
+                          "Internet dedicado"
+                        ]
+                      },
+                      "capacityMbps": {
+                        "type": "integer",
+                        "minimum": 50,
+                        "maximum": 1000
+                      },
+                      "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "customerReference": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "locationToken": {
+                        "type": "string",
+                        "minLength": 20,
+                        "maxLength": 5000
+                      },
+                      "company": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "fullName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Nombre(s) y apellidos en un solo campo."
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "channel",
+                      "product",
+                      "capacityMbps",
+                      "company",
+                      "fullName",
+                      "email",
+                      "locations"
+                    ],
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "ENTERPRISE",
+                          "WHOLESALE"
+                        ]
+                      },
+                      "product": {
+                        "enum": [
+                          "Internet dedicado"
+                        ]
+                      },
+                      "capacityMbps": {
+                        "type": "integer",
+                        "minimum": 50,
+                        "maximum": 1000
+                      },
+                      "customerReference": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "company": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "fullName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Nombre(s) y apellidos en un solo campo."
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                      },
+                      "locations": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 10,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "address",
+                            "city",
+                            "latitude",
+                            "longitude",
+                            "locationToken"
+                          ],
+                          "properties": {
+                            "address": {
+                              "type": "string",
+                              "minLength": 5,
+                              "maxLength": 1000
+                            },
+                            "city": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 200,
+                              "description": "Ciudad obtenida de la dirección confirmada; no requiere captura manual en CX."
+                            },
+                            "latitude": {
+                              "type": "number",
+                              "minimum": -90,
+                              "maximum": 90
+                            },
+                            "longitude": {
+                              "type": "number",
+                              "minimum": -180,
+                              "maximum": 180
+                            },
+                            "locationToken": {
+                              "type": "string",
+                              "minLength": 20,
+                              "maxLength": 5000
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "channel",
+                      "company",
+                      "fullName",
+                      "email",
+                      "product",
+                      "services"
+                    ],
+                    "properties": {
+                      "channel": {
+                        "enum": [
+                          "ENTERPRISE",
+                          "WHOLESALE"
+                        ]
+                      },
+                      "customerReference": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "company": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "fullName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "Nombre(s) y apellidos en un solo campo."
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                      },
+                      "product": {
+                        "enum": [
+                          "Internet dedicado",
+                          "L2L"
+                        ]
+                      },
+                      "services": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 10,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "capacityMbps",
+                            "locations"
+                          ],
+                          "properties": {
+                            "capacityMbps": {
+                              "type": "integer",
+                              "minimum": 50,
+                              "maximum": 1000
+                            },
+                            "locations": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 2,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "address",
+                                  "city",
+                                  "latitude",
+                                  "longitude",
+                                  "locationToken"
+                                ],
+                                "properties": {
+                                  "address": {
+                                    "type": "string",
+                                    "minLength": 5,
+                                    "maxLength": 1000
+                                  },
+                                  "city": {
+                                    "type": "string",
+                                    "minLength": 2,
+                                    "maxLength": 200,
+                                    "description": "Ciudad obtenida de la dirección confirmada; no requiere captura manual en CX."
+                                  },
+                                  "latitude": {
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                  },
+                                  "longitude": {
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                  },
+                                  "locationToken": {
+                                    "type": "string",
+                                    "minLength": 20,
+                                    "maxLength": 5000
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Consulta creada o mismo resultado por reintento",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Consultation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Solicitud inválida o falta token"
+          },
+          "409": {
+            "description": "Misma clave para otro contenido"
+          },
+          "422": {
+            "description": "Ubicación sin validar, modificada o token expirado"
+          },
+          "429": {
+            "description": "Cuota local excedida"
+          },
+          "500": {
+            "description": "No se pudo persistir la oportunidad y consulta"
+          }
+        },
+        "description": " Con sesión CX, valida CSRF y email y asigna customerId en el servidor; no cruza claves idempotentes entre propietarios. Sin sesión conserva la consulta pública. Acepta el formato individual anterior o locations (1–10 direcciones únicas), con servicio, capacidad y contacto compartidos. Verifica todos los tokens antes de guardar. Evalúa todas las localidades contra la misma versión de mapas activos. Un código y una oportunidad; resultado individual en locations. Resultados mixtos tienen estado global PENDING. La redundancia requiere dos carriers factibles en una misma localidad. Formato services: capacidad individual entera (50–1000 Mbps). Internet dedicado requiere exactamente una dirección por servicio; L2L exactamente dos en orden A, B. Máximo 10 direcciones total (10 Internet o 5 L2L). Permite puntas compartidas entre enlaces; A y B del mismo enlace deben ser distintas. Persiste services con locationIndexes que apuntan al arreglo locations; para una sola dirección el índice 0 apunta a input. La cobertura de cada punta no confirma transporte L2L y el enlace queda pendiente de validar. Recuperación e historial conservan la agrupación y capacidades. CX devuelve exclusivamente resúmenes anónimos por servicio y localidad: cantidad de rutas, tecnología y distancia al PoP sin identidad. No publica nombres/IDs de proveedores, PoPs, mapas, versiones, archivos, coordenadas de red ni texto interno. La misma proyección aplica a consultas históricas, recuperación, historial, preferencias y correo. Link Partner interno conserva la evidencia completa sin recalcular ni modificar los resultados guardados."
+      }
+    },
+    "/consultations/{code}": {
+      "get": {
+        "operationId": "recoverConsultation",
+        "summary": "Recuperar consulta privada mediante código y llave",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[A-HJ-NP-Z2-9]{6}|[A-HJ-NP-Z2-9]{8}|LP-[A-F0-9]{20})$"
+            }
+          },
+          {
+            "name": "X-Consultation-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consulta recuperada, sin geometrías ni archivos internos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Consultation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Consulta o llave incorrecta"
+          },
+          "429": {
+            "description": "Cuota local excedida"
+          }
+        },
+        "description": "Compatibilidad con consultas anteriores sin email registrado; requiere la llave privada original. CX devuelve exclusivamente resúmenes anónimos por servicio y localidad: cantidad de rutas, tecnología y distancia al PoP sin identidad. No publica nombres/IDs de proveedores, PoPs, mapas, versiones, archivos, coordenadas de red ni texto interno. La misma proyección aplica a consultas históricas, recuperación, historial, preferencias y correo. Link Partner interno conserva la evidencia completa sin recalcular ni modificar los resultados guardados."
+      }
+    },
+    "/locations/suggest": {
+      "post": {
+        "operationId": "suggestLocations",
+        "summary": "Sugerir direcciones o confirmar coordenadas y enlaces de Google Maps",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 2048,
+                    "description": "Dirección, coordenadas DD/DMS/DMM (latitud primero), o enlace HTTPS de Google Maps, incluidos enlaces cortos."
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 100
+                  },
+                  "sessionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Requerido para autocompletar texto con Google Places; no se requiere para coordenadas o enlaces a puntos."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Predicciones de dirección o candidatos con coordenadas exactas y token de ubicación firmado, listos para seleccionar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "maxItems": 5,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "address",
+                          "provider"
+                        ],
+                        "properties": {
+                          "placeId": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "google"
+                            ]
+                          },
+                          "city": {
+                            "type": "string"
+                          },
+                          "latitude": {
+                            "type": "number",
+                            "minimum": -90,
+                            "maximum": 90
+                          },
+                          "longitude": {
+                            "type": "number",
+                            "minimum": -180,
+                            "maximum": 180
+                          },
+                          "token": {
+                            "type": "string",
+                            "description": "Firma de ubicación confirmada; sólo en candidatos resueltos."
+                          },
+                          "coordinateInput": {
+                            "type": "boolean",
+                            "description": "Conserva el punto exacto de las coordenadas ingresadas."
+                          },
+                          "precision": {
+                            "type": "string",
+                            "enum": [
+                              "address",
+                              "street-or-area"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dirección incompleta"
+          },
+          "429": {
+            "description": "Cuota local excedida"
+          },
+          "503": {
+            "description": "Geocodificador o firma no disponible"
+          },
+          "422": {
+            "description": "Coordenadas fuera de rango, enlace inválido o ubicación sin localidad válida en México."
+          }
+        },
+        "description": "Acepta direcciones y coordenadas decimales, grados/minutos/segundos o grados/minutos decimales. Admite URLs de Google Maps de búsqueda, lugares y destinos, incluyendo enlaces cortos con redirecciones limitadas a Google Maps. Usa el marcador/destino antes que el centro @ del mapa. Los puntos numéricos conservan sus coordenadas exactas; Google Places aporta sólo contexto de localidad en México. Un punto sin referencia de localidad genera 422. Las direcciones de texto usan Autocomplete New y se resuelven al elegir una opción. Photon conserva sus candidatos cuando está configurado."
+      }
+    },
+    "/locations/resolve": {
+      "post": {
+        "summary": "Confirmar la ubicación de la dirección elegida",
+        "operationId": "resolveLocation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "placeId",
+                  "sessionToken",
+                  "address"
+                ],
+                "properties": {
+                  "placeId": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "sessionToken": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "address": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 2048
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dirección canónica, ciudad, coordenadas y token de ubicación firmado"
+          },
+          "400": {
+            "description": "Solicitud inválida"
+          },
+          "422": {
+            "description": "Ubicación fuera de México o sin ciudad"
+          },
+          "503": {
+            "description": "Proveedor no disponible"
+          }
+        }
+      }
+    },
+    "/locations/config": {
+      "get": {
+        "summary": "Proveedor de direcciones y clave pública del mapa",
+        "operationId": "getLocationConfig",
+        "description": "No devuelve la clave privada de Places. La clave pública del mapa debe estar restringida por referrer y API.",
+        "responses": {
+          "200": {
+            "description": "Proveedor configurado y clave pública del navegador; null si no existe"
+          }
+        }
+      }
+    },
+    "/consultations/{code}/retrieve": {
+      "post": {
+        "operationId": "recoverConsultationByEmail",
+        "summary": "Recuperar consulta con código y email",
+        "description": "Exige coincidencia con el email registrado, ignorando mayúsculas y espacios al inicio o final. Nombre, apellido y empresa no conceden acceso. Límite de cinco intentos fallidos por código y origen durante un minuto. No envía mensajes de correo. CX devuelve exclusivamente resúmenes anónimos por servicio y localidad: cantidad de rutas, tecnología y distancia al PoP sin identidad. No publica nombres/IDs de proveedores, PoPs, mapas, versiones, archivos, coordenadas de red ni texto interno. La misma proyección aplica a consultas históricas, recuperación, historial, preferencias y correo. Link Partner interno conserva la evidencia completa sin recalcular ni modificar los resultados guardados.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:[A-HJ-NP-Z2-9]{6}|[A-HJ-NP-Z2-9]{8}|LP-[A-F0-9]{20})$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254,
+                    "description": "Email registrado en la consulta."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Consulta recuperada, sin geometrías ni archivos internos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Consultation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Código o email incorrectos; mensaje uniforme para códigos inexistentes."
+          },
+          "429": {
+            "description": "Demasiados intentos; consultar Retry-After."
+          }
+        }
+      }
+    },
+    "/digital-consultations": {
+      "get": {
+        "operationId": "listInternalDigitalConsultations",
+        "summary": "Listar todas las consultas CX guardadas para usuarios internos",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Sólo roles internos habilitados en Link Partner. No requiere la llave de recuperación ni el email del cliente. Nunca devuelve accessHash ni requestHash. No está publicado por el proxy público de CX.",
+        "responses": {
+          "200": {
+            "description": "Registros persistidos de Link Partner, incluidos estados sin cobertura o validación pendiente. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DigitalConsultationSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión requerida"
+          },
+          "403": {
+            "description": "Rol externo o no autorizado"
+          }
+        }
+      }
+    },
+    "/digital-consultations/{code}": {
+      "get": {
+        "operationId": "getInternalDigitalConsultation",
+        "summary": "Abrir expediente CX desde su oportunidad DIGITAL",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Sólo roles internos habilitados en Link Partner. No requiere la llave de recuperación ni el email del cliente. Nunca devuelve accessHash ni requestHash. No está publicado por el proxy público de CX.",
+        "responses": {
+          "200": {
+            "description": "Expediente, resultado original de cobertura y locationValidation (dirección original/confirmada, proveedor y fecha), sin firmas ni hashes privados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InternalConsultation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sesión requerida"
+          },
+          "403": {
+            "description": "Rol externo o no autorizado"
+          },
+          "404": {
+            "description": "Consulta inexistente o inaccesible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/customers/register": {
+      "post": {
+        "summary": "Crear una cuenta CX y su sesión. No verifica la propiedad del email.",
+        "security": [],
+        "responses": {
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          },
+          "201": {
+            "description": "Cuenta creada, Set-Cookie y data.customer/data.csrfToken"
+          },
+          "409": {
+            "description": "No se pudo crear la cuenta; email reservado"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "password",
+                  "fullName",
+                  "company"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 128,
+                    "writeOnly": true,
+                    "pattern": "^(?=.*\\p{Lu})(?=.*\\p{Ll})(?=.*[^\\p{L}\\p{N}\\s]).{8,128}$",
+                    "description": "8–128 caracteres; al menos una mayúscula, una minúscula y un carácter especial distinto de espacio. No requiere números."
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "company": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/login": {
+      "post": {
+        "summary": "Iniciar sesión y rotar la sesión del navegador",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "writeOnly": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/me": {
+      "get": {
+        "summary": "Perfil público y csrfToken de la sesión o null",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          }
+        }
+      }
+    },
+    "/customers/logout": {
+      "post": {
+        "summary": "Revocar sesión y borrar cookie",
+        "security": [
+          {
+            "CustomerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/consultations": {
+      "get": {
+        "summary": "Historial privado de consultas propias con seguimiento público",
+        "security": [
+          {
+            "CustomerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          }
+        }
+      }
+    },
+    "/customers/consultations/{code}": {
+      "get": {
+        "summary": "Recuperar consulta propia y hitos del proyecto asociado",
+        "security": [
+          {
+            "CustomerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          },
+          "404": {
+            "description": "Código ajeno o inexistente"
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 8
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Importar individualmente consulta anterior con el código y el email de la cuenta; no cambia otro propietario",
+        "security": [
+          {
+            "CustomerSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta privada, Cache-Control: no-store"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "401": {
+            "description": "Sesión o credenciales inválidas"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "429": {
+            "description": "Cuota excedida; Retry-After"
+          },
+          "404": {
+            "description": "Código y email no coinciden o consulta asignada a otra cuenta"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 8
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suppliers/{id}/coverage-activity": {
+      "get": {
+        "summary": "Historial de actualizaciones del mapa de un proveedor",
+        "description": "Acceso interno autenticado. Eventos persistentes del más reciente al más antiguo.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CoverageActivity"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suppliers/{id}/coverage": {
+      "put": {
+        "summary": "Cargar o actualizar un mapa GeoJSON proveniente de KML/KMZ",
+        "description": "Sustitución atómica por coverageId, incluso con otro nombre de archivo. Requiere expectedRevisionId vigente; conserva el identificador y sustituye geometría completa. operation=add agrega un archivo independiente explícitamente. Geometrías inválidas o pérdida de polígonos al sustituir una cobertura se rechazan sin cambiar el mapa. El API confirma la revisión activa tras la persistencia. Cada archivo se activa por separado.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "sourceFileName",
+                  "color",
+                  "data"
+                ],
+                "properties": {
+                  "sourceFileName": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "FeatureCollection"
+                      },
+                      "features": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 50000,
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "coverageId": {
+                    "type": "string",
+                    "description": "Identificador del mapa vigente a sustituir."
+                  },
+                  "expectedRevisionId": {
+                    "type": "string",
+                    "description": "Revisión del mapa que el usuario seleccionó; obligatoria al sustituir."
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "add",
+                      "replace"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operación exitosa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "mapVersion": {
+                          "$ref": "#/components/schemas/CoverageMapVersion"
+                        },
+                        "activation": {
+                          "type": "object",
+                          "properties": {
+                            "verified": {
+                              "const": true
+                            },
+                            "revisionId": {
+                              "type": "string"
+                            },
+                            "replacedRevisionId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revisión anterior, mapa de otro proveedor o colisión de nombre; no se sustituye."
+          },
+          "422": {
+            "description": "Geometría inválida o sustitución de área sin polígonos; se conserva la revisión vigente."
+          },
+          "428": {
+            "description": "Falta expectedRevisionId o la elección explícita de agregar/sustituir."
+          }
+        }
+      }
+    },
+    "/supplier-coverages/versions": {
+      "get": {
+        "summary": "Metadatos de las revisiones activas; sin geometría y sin caché",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Manifiesto para detectar cambios en vistas abiertas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "success"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CoverageMapVersion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/consultations/{code}/proposal-options": {
+      "patch": {
+        "operationId": "updateCarrierRedundancyPreference",
+        "summary": "Guardar preferencia de propuestas con redundancia de rutas",
+        "description": "Nuevas consultas marcan la opción automáticamente cuando hay dos o más supplierId distintos con evidencia OnNet o NearNet dentro del mapa guardado. FO/MW y archivos del mismo proveedor cuentan una sola vez; redes fuera del mapa o sin geometría suficiente no cuentan. El cliente puede desmarcar o volver a marcar. Se exige código+email, llave privada o sesión del propietario; las sesiones requieren CSRF. La consulta y oportunidad se actualizan atómicamente, sin recalcular la cobertura guardada. Registra una solicitud para preparar ofertas; no envía emails ni garantiza independencia física de rutas. CX devuelve exclusivamente resúmenes anónimos por servicio y localidad: cantidad de rutas, tecnología y distancia al PoP sin identidad. No publica nombres/IDs de proveedores, PoPs, mapas, versiones, archivos, coordenadas de red ni texto interno. La misma proyección aplica a consultas históricas, recuperación, historial, preferencias y correo. Link Partner interno conserva la evidencia completa sin recalcular ni modificar los resultados guardados.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "const": "1"
+            }
+          },
+          {
+            "name": "X-Consultation-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "carrierRedundancy"
+                ],
+                "properties": {
+                  "carrierRedundancy": {
+                    "type": "boolean"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preferencia guardada en consulta y oportunidad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Consultation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "404": {
+            "description": "Consulta o datos de acceso incorrectos"
+          },
+          "409": {
+            "description": "No hay dos carriers distintos prefactibles para solicitar redundancia"
+          },
+          "429": {
+            "description": "Cuota de solicitudes excedida"
+          }
+        }
+      }
+    },
+    "/consultations/{code}/email": {
+      "post": {
+        "summary": "Enviar el resultado guardado al email registrado",
+        "description": "Requiere código + email registrado o sesión propietaria con CSRF. Sólo envía al destinatario guardado. Google Workspace SMTP con TLS; sin configuración devuelve 503. ACCEPTED confirma aceptación SMTP, no entrega a la bandeja.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CX-Request",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Obligatorio si existe sesión de cliente.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email guardado. Puede omitirse con sesión propietaria."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aceptado por SMTP"
+          },
+          "400": {
+            "description": "Solicitud inválida"
+          },
+          "401": {
+            "description": "Sesión vencida"
+          },
+          "403": {
+            "description": "Solicitud o CSRF inválidos"
+          },
+          "404": {
+            "description": "Consulta o datos de acceso incorrectos"
+          },
+          "429": {
+            "description": "Límite de correo alcanzado; Retry-After"
+          },
+          "503": {
+            "description": "Correo sin configurar o fallo de SMTP"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "CustomerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-cx-session",
+        "description": "Cookie HttpOnly y Secure. Cuentas CX sin permisos de operaciones."
+      }
+    },
+    "schemas": {
+      "LocationAndService": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channel",
+          "address",
+          "city",
+          "product",
+          "capacityMbps",
+          "company",
+          "fullName",
+          "email"
+        ],
+        "properties": {
+          "channel": {
+            "enum": [
+              "ENTERPRISE",
+              "WHOLESALE"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 1000
+          },
+          "city": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200,
+            "description": "Ciudad obtenida de la dirección confirmada; no requiere captura manual en CX."
+          },
+          "product": {
+            "enum": [
+              "Internet dedicado",
+              "L2L",
+              "MPLS"
+            ]
+          },
+          "capacityMbps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "customerReference": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "company": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "fullName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Nombre(s) y apellidos en un solo campo."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        }
+      },
+      "LocationCandidate": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "precision": {
+            "enum": [
+              "address",
+              "street-or-area"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "description": "Confirmación firmada de dirección/coordenadas. Vigencia 30 minutos."
+          }
+        }
+      },
+      "SupplierCoverageResult": {
+        "type": "object",
+        "properties": {
+          "supplierName": {
+            "type": "string"
+          },
+          "classification": {
+            "enum": [
+              "on-net",
+              "near-net",
+              "off-net"
+            ]
+          },
+          "policyLevel": {
+            "type": "string"
+          },
+          "distanceMeters": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "technologies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TechnologyCoverage"
+            }
+          }
+        }
+      },
+      "Coverage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "AVAILABLE",
+              "PENDING",
+              "NO_COVERAGE",
+              "ERROR"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "technologies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicTechnologyCoverage"
+            }
+          },
+          "routeCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Número de opciones prefactibles de conectividad sin identidad de red; cada red elegible cuenta una vez. En L2L se cuentan únicamente las opciones comunes a ambas puntas. No confirma independencia física."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Consultation": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^(?:[A-HJ-NP-Z2-9]{6}|[A-HJ-NP-Z2-9]{8}|LP-[A-F0-9]{20})$"
+          },
+          "opportunityId": {
+            "type": "string"
+          },
+          "source": {
+            "const": "DIGITAL"
+          },
+          "channel": {
+            "enum": [
+              "ENTERPRISE",
+              "WHOLESALE"
+            ]
+          },
+          "input": {
+            "$ref": "#/components/schemas/LocationAndService"
+          },
+          "qualificationStatus": {
+            "enum": [
+              "PRICING_PENDING",
+              "FEASIBILITY_PENDING",
+              "NO_COVERAGE",
+              "VALIDATION_PENDING"
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/Coverage"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              },
+              "amount": {
+                "type": "null"
+              },
+              "currency": {
+                "const": "MXN"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tracking": {
+            "type": "object"
+          },
+          "proposalOptions": {
+            "$ref": "#/components/schemas/ProposalOptions"
+          },
+          "locations": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "$ref": "#/components/schemas/LocationAndService"
+                },
+                "coverage": {
+                  "$ref": "#/components/schemas/Coverage"
+                }
+              }
+            },
+            "description": "Presente en consultas de varias localidades; input principal conserva la primera dirección por compatibilidad."
+          },
+          "services": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/ConsultationService"
+            }
+          }
+        }
+      },
+      "DigitalConsultationSummary": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "opportunityId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "channel": {
+            "enum": [
+              "ENTERPRISE",
+              "WHOLESALE"
+            ]
+          },
+          "qualificationStatus": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customerReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "capacityMbps": {
+            "type": "integer"
+          },
+          "coverageStatus": {
+            "enum": [
+              "AVAILABLE",
+              "PENDING",
+              "NO_COVERAGE",
+              "ERROR"
+            ]
+          },
+          "carrierRedundancyRequested": {
+            "type": "boolean"
+          },
+          "locationCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "serviceCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "capacitiesMbps": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "TechnologyCoverage": {
+        "type": "object",
+        "required": [
+          "technology",
+          "status",
+          "classification",
+          "distanceMeters",
+          "policyLevel",
+          "reason"
+        ],
+        "properties": {
+          "technology": {
+            "type": "string",
+            "enum": [
+              "MW",
+              "FO"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "PENDING",
+              "NO_COVERAGE"
+            ]
+          },
+          "classification": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "on-net",
+              "near-net",
+              "off-net",
+              null
+            ]
+          },
+          "distanceMeters": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Distancia informativa a los polígonos de cobertura. No determina clasificación FO ni factibilidad MW. La distancia al PoP se publica por separado en nearestPop.distanceMeters."
+          },
+          "policyLevel": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "supplierNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "insideCoverage": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Sólo MW: true si el sitio está dentro de su mancha, false si está fuera, null si no hay polígonos utilizables."
+          },
+          "nearestPop": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CoveragePoP"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearbyPops": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/CoveragePoP"
+            }
+          },
+          "nearbyPopRadiusMeters": {
+            "type": "number",
+            "const": 25000
+          }
+        }
+      },
+      "CoveragePoP": {
+        "type": "object",
+        "required": [
+          "name",
+          "reference",
+          "kind",
+          "supplierName",
+          "technology",
+          "latitude",
+          "longitude",
+          "distanceMeters",
+          "insideCoverage",
+          "sourceFileName"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nombre explícito del PoP. No se infiere de un código de cobertura."
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Referencia original del punto o placemark KML."
+          },
+          "kind": {
+            "enum": [
+              "POP",
+              "NETWORK_REFERENCE"
+            ]
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "technology": {
+            "enum": [
+              "MW",
+              "FO",
+              null
+            ]
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "distanceMeters": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Distancia en línea recta desde el sitio al punto, no a la mancha."
+          },
+          "insideCoverage": {
+            "type": "boolean",
+            "description": "El punto está dentro de la mancha MW de su proveedor."
+          },
+          "sourceFileName": {
+            "type": "string"
+          }
+        }
+      },
+      "CoverageMapVersion": {
+        "type": "object",
+        "required": [
+          "id",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "supplierId": {
+            "type": "string"
+          },
+          "supplierName": {
+            "type": "string"
+          },
+          "sourceFileName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Revisión inmutable del mapa evaluado. Los registros anteriores al versionado conservan id y updatedAt; no se inventa una huella histórica."
+      },
+      "CoverageActivity": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "occurredAt",
+          "actor",
+          "map",
+          "previousMap",
+          "featureCount",
+          "polygonCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "enum": [
+              "CREATED",
+              "UPDATED"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "authUid": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            }
+          },
+          "map": {
+            "$ref": "#/components/schemas/CoverageMapVersion"
+          },
+          "previousMap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverageMapVersion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "featureCount": {
+            "type": "integer"
+          },
+          "polygonCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "ProposalOptions": {
+        "type": "object",
+        "properties": {
+          "carrierRedundancyAvailable": {
+            "type": "boolean"
+          },
+          "carrierRedundancyRequested": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "redundancyLocations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Direcciones con al menos dos rutas prefactibles; no combina opciones de localidades diferentes."
+          },
+          "routeCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConsultationService": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "enum": [
+              "Internet dedicado",
+              "L2L"
+            ]
+          },
+          "capacityMbps": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 1000
+          },
+          "locationIndexes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/Coverage"
+          }
+        }
+      },
+      "InternalCoverage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "AVAILABLE",
+              "PENDING",
+              "NO_COVERAGE",
+              "ERROR"
+            ]
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "suppliers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "supplierName": {
+                  "type": "string"
+                },
+                "classification": {
+                  "enum": [
+                    "on-net",
+                    "near-net",
+                    "off-net"
+                  ]
+                },
+                "policyLevel": {
+                  "type": "string"
+                },
+                "distanceMeters": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "technologies": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TechnologyCoverage"
+                  }
+                }
+              }
+            }
+          },
+          "technologies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TechnologyCoverage"
+            }
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoverageMapVersion"
+            }
+          },
+          "policyVersion": {
+            "type": "string",
+            "description": "Motor usado al guardar el resultado; legacy identifica consultas anteriores."
+          }
+        }
+      },
+      "InternalProposalOptions": {
+        "type": "object",
+        "properties": {
+          "carrierRedundancyAvailable": {
+            "type": "boolean"
+          },
+          "carrierRedundancyRequested": {
+            "type": "boolean"
+          },
+          "feasibleSupplierCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "supplierNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "redundancyLocations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Direcciones con al menos dos carriers distintos factibles. No combina proveedores de sitios diferentes."
+          }
+        }
+      },
+      "InternalConsultationService": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "enum": [
+              "Internet dedicado",
+              "L2L"
+            ]
+          },
+          "capacityMbps": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 1000
+          },
+          "locationIndexes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/InternalCoverage"
+          }
+        }
+      },
+      "InternalConsultation": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^(?:[A-HJ-NP-Z2-9]{6}|[A-HJ-NP-Z2-9]{8}|LP-[A-F0-9]{20})$"
+          },
+          "opportunityId": {
+            "type": "string"
+          },
+          "source": {
+            "const": "DIGITAL"
+          },
+          "channel": {
+            "enum": [
+              "ENTERPRISE",
+              "WHOLESALE"
+            ]
+          },
+          "input": {
+            "$ref": "#/components/schemas/LocationAndService"
+          },
+          "qualificationStatus": {
+            "enum": [
+              "PRICING_PENDING",
+              "FEASIBILITY_PENDING",
+              "NO_COVERAGE",
+              "VALIDATION_PENDING"
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/InternalCoverage"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              },
+              "amount": {
+                "type": "null"
+              },
+              "currency": {
+                "const": "MXN"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tracking": {
+            "type": "object"
+          },
+          "proposalOptions": {
+            "$ref": "#/components/schemas/InternalProposalOptions"
+          },
+          "locations": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "$ref": "#/components/schemas/LocationAndService"
+                },
+                "coverage": {
+                  "$ref": "#/components/schemas/InternalCoverage"
+                },
+                "locationValidation": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Presente en consultas de varias localidades; input principal conserva la primera dirección por compatibilidad."
+          },
+          "services": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/InternalConsultationService"
+            }
+          }
+        }
+      },
+      "PublicTechnologyCoverage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "technology": {
+            "enum": [
+              "MW",
+              "FO"
+            ]
+          },
+          "status": {
+            "enum": [
+              "AVAILABLE",
+              "PENDING",
+              "NO_COVERAGE"
+            ]
+          },
+          "nearestPopDistanceMeters": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Distancia informativa en línea recta al PoP más cercano, sin nombre, referencia ni coordenadas; null cuando no existe un PoP identificado."
+          }
+        }
+      }
+    }
+  }
+}

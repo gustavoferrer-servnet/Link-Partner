@@ -1,8 +1,17 @@
+import { internalConsultation } from '../services/prefeasibility.js';
+import { initialSupplierManagement } from '../services/supplierEvaluation.js';
+import { supplierManagementRouter } from './supplierManagement.js';
 import { Router } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { authenticate, loadAppUser, requireRole } from '../middleware/auth.js';
 import { repository } from '../repositories/index.js';
+import { CoverageConflict } from '../services/coverageVersions.js';
+import { validateCoverageUpload } from '../services/coverageUpload.js';
+import { evaluateSupplierCoverage } from '../services/coverageEngine.js';
+import { reserveConsultation } from '../services/consultationCodes.js';
+import { feasibleCarriers } from '../services/carrierRedundancy.js';
+import { consultationSummary } from '../services/prefeasibility.js';
 import type { AuthenticatedRequest, SupplierRecord } from '../types.js';
 
 export const apiRouter = Router();
@@ -15,6 +24,9 @@ const supplierSchema = z.object({
 });
 
 const coverageSchema = z.object({
+  coverageId: z.string().min(1).max(200).optional(),
+  expectedRevisionId: z.string().min(1).max(100).optional(),
+  operation: z.enum(['add', 'replace']).optional(),
   sourceFileName: z.string().trim().min(1).max(260),
   color: z.string().regex(/^#[0-9a-f]{6}$/i),
   data: z.object({
@@ -81,26 +93,31 @@ function supplierId(name: string, existingIds: Set<string>) {
   return id;
 }
 
-function coverageId(supplierIdValue: string, sourceFileName: string) {
-  const digest = createHash('sha256').update(sourceFileName.trim().toLocaleLowerCase('es-MX')).digest('hex').slice(0, 16).toUpperCase();
-  return `COV-${supplierIdValue}-${digest}`;
-}
 
-function geometryPolygonCount(geometry: unknown): number {
-  if (!geometry || typeof geometry !== 'object') return 0;
-  const value = geometry as { type?: unknown; coordinates?: unknown; geometries?: unknown };
-  if (value.type === 'Polygon') return 1;
-  if (value.type === 'MultiPolygon' && Array.isArray(value.coordinates)) return value.coordinates.length;
-  if (value.type === 'GeometryCollection' && Array.isArray(value.geometries)) {
-    return value.geometries.reduce<number>((total, child) => total + geometryPolygonCount(child), 0);
-  }
-  return 0;
-}
+
+
 
 apiRouter.use(authenticate, loadAppUser);
 
+const internalConsultationAccess = requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'delivery_manager', 'noc', 'finance', 'viewer');
+apiRouter.get('/digital-consultations', internalConsultationAccess, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    const records = await repository.listConsultations(req.appUser!);
+    res.json({ status: 'success', data: records.filter(record => record.opportunity.source !== 'COVERAGE').map(consultationSummary) });
+  } catch (error) { next(error); }
+});
+apiRouter.get('/digital-consultations/:code', internalConsultationAccess, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    const record = await repository.getInternalConsultation(String(req.params.code), req.appUser!);
+    if (!record) { res.status(404).json({ message: 'La consulta no existe o no puedes verla.' }); return; }
+    res.json({ status: 'success', data: { ...internalConsultation(record), locationValidation: record.locationValidation ?? null } });
+  } catch (error) { next(error); }
+});
+
 apiRouter.get('/session', (req: AuthenticatedRequest, res) => {
-  res.json({ status: 'success', data: req.appUser });
+  res.set('Cache-Control', 'no-store').json({ status: 'success', data: req.appUser });
 });
 
 apiRouter.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
@@ -129,6 +146,46 @@ apiRouter.get('/opportunities', async (req: AuthenticatedRequest, res, next) => 
   catch (error) { next(error); }
 });
 
+apiRouter.post('/coverage/consultations', requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const parsed = z.object({
+      requestId: z.string().uuid(), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180),
+      address: z.string().trim().min(3).max(2048), siteName: z.string().trim().min(2).max(180),
+      capacityMbps: z.number().int().min(1).max(100000), company: z.string().trim().max(180).default(''),
+      coverageSelection: z.array(z.object({ id: z.string().min(1).max(200), revisionId: z.string().min(1).max(100), featureIndexes: z.array(z.number().int().min(0).max(1000000)).min(1).max(100000) }).strict()).min(1).max(100),
+    }).strict().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ message: 'Revisa el sitio, capacidad y las capas de cobertura seleccionadas.' }); return; }
+    const { requestId, siteName, coverageSelection, company, ...location } = parsed.data;
+    const user = req.appUser!;
+    const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+    const accessHash = hash(`coverage:${user.authUid}:${requestId}`);
+    const requestHash = hash(JSON.stringify(parsed.data));
+    let record = await repository.getConsultationByAccessHash(accessHash);
+    if (!record) {
+      const input = { ...location, channel: 'ENTERPRISE' as const, city: '', product: 'Internet dedicado' as const, company };
+      const coverage = await evaluateSupplierCoverage(input, user, coverageSelection);
+      const qualificationStatus = coverage.status === 'AVAILABLE' ? 'PRICING_PENDING' : coverage.status === 'NO_COVERAGE' ? 'NO_COVERAGE' : 'FEASIBILITY_PENDING';
+      const createdAt = new Date().toISOString();
+      const createdBy = { authUid: user.authUid, email: user.email, displayName: user.displayName };
+      const carrierRedundancy = feasibleCarriers(coverage).length >= 2;
+      record = await reserveConsultation(repository, { accessHash, requestHash, input, coverage, qualificationStatus, createdAt, createdBy,
+        proposalPreferences: { carrierRedundancy, updatedAt: createdAt, source: 'AUTOMATIC' },
+        pricing: { status: 'PENDING', amount: null, currency: 'MXN', reason: 'Consulta guardada. Preparar la propuesta después de validar la solución, el precio y el SLA.' },
+        opportunity: {
+          id: 'pending-reservation', source: 'COVERAGE', origin: 'Servnet', siteId: 'pending-reservation', siteName,
+          address: input.address, city: input.city, latitude: input.latitude, longitude: input.longitude,
+          level: null, network: null, service: input.product, capacity: `${input.capacityMbps} Mbps`,
+          clientSla: 'Por confirmar', deliveryDate: 'Por confirmar', status: qualificationStatus, mrc: null, margin: null, participantId: null,
+          carrierRedundancyRequested: carrierRedundancy,
+          prefeasibility: { location: { latitude: input.latitude, longitude: input.longitude, address: input.address }, coverage, coverageSelection, savedAt: createdAt, createdBy },
+        },
+      });
+    }
+    if (record.requestHash !== requestHash || record.createdBy?.authUid !== user.authUid || record.opportunity.source !== 'COVERAGE') { res.status(409).json({ message: 'Esta solicitud ya corresponde a otra consulta. Inicia un nuevo guardado.' }); return; }
+    res.set('Cache-Control', 'no-store').status(201).json({ status: 'success', data: record.opportunity });
+  } catch (error) { next(error); }
+});
+
 apiRouter.get('/opportunities/:id', async (req: AuthenticatedRequest, res, next) => {
   try {
     const record = await repository.getOpportunity(String(req.params.id), req.appUser!);
@@ -139,6 +196,17 @@ apiRouter.get('/opportunities/:id', async (req: AuthenticatedRequest, res, next)
     res.json({ status: 'success', data: record });
   } catch (error) { next(error); }
 });
+
+apiRouter.post('/opportunities/:id/proposals', requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!z.object({}).strict().safeParse(req.body).success) { res.status(400).json({ message: 'La propuesta se genera con los datos guardados en la oportunidad.' }); return; }
+    const opportunity = await repository.createOpportunityProposal(String(req.params.id), req.appUser!);
+    if (!opportunity) { res.status(404).json({ message: 'Guarda una prefactibilidad antes de preparar la propuesta.' }); return; }
+    res.set('Cache-Control', 'no-store').status(201).json({ status: 'success', data: opportunity });
+  } catch (error) { next(error); }
+});
+
+apiRouter.use(supplierManagementRouter);
 
 apiRouter.get(
   '/suppliers',
@@ -164,6 +232,7 @@ apiRouter.post(
       const record: SupplierRecord = {
         id: supplierId(parsed.data.name, new Set(existingSuppliers.map((supplier) => supplier.id))),
         ...parsed.data,
+        management: initialSupplierManagement(),
         sla: null,
         score: null,
         activeLinks: null,
@@ -178,10 +247,26 @@ apiRouter.get(
   '/supplier-coverages',
   requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'finance', 'viewer'),
   async (req: AuthenticatedRequest, res, next) => {
-    try { res.json({ status: 'success', data: await repository.listSupplierCoverages(req.appUser!) }); }
+    try { res.set('Cache-Control', 'no-store').json({ status: 'success', data: await repository.listSupplierCoverages(req.appUser!) }); }
     catch (error) { next(error); }
   },
 );
+
+apiRouter.get('/supplier-coverages/versions', requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'finance', 'viewer'), async (req: AuthenticatedRequest, res, next) => {
+  try { res.set('Cache-Control', 'no-store').json({ status: 'success', data: await repository.listSupplierCoverageVersions(req.appUser!) }); } catch (error) { next(error); }
+});
+
+apiRouter.get('/supplier-coverages/:id', requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'finance', 'viewer'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const record = await repository.getSupplierCoverage(String(req.params.id), req.appUser!);
+    res.set('Cache-Control', 'no-store');
+    if (!record) { res.status(404).json({ status: 'error', message: 'El mapa ya no está vigente.' }); return; }
+    if (req.query.revision && req.query.revision !== record.mapVersion?.revisionId) {
+      res.status(409).json({ status: 'error', code: 'COVERAGE_REVISION_CONFLICT', message: 'El mapa cambió. Actualiza las coberturas.' }); return;
+    }
+    res.json({ status: 'success', data: record });
+  } catch (error) { next(error); }
+});
 
 apiRouter.put(
   '/suppliers/:id/coverage',
@@ -205,13 +290,20 @@ apiRouter.put(
         return;
       }
 
-      const polygonCount = parsed.data.data.features.reduce((total, feature) => total + geometryPolygonCount(feature.geometry), 0);
-      const existingCoverage = existingCoverages.find((coverage) => (
+      const namedCoverage = existingCoverages.find((coverage) => (
         coverage.supplierId === supplier.id
         && coverage.sourceFileName.localeCompare(parsed.data.sourceFileName, 'es-MX', { sensitivity: 'accent' }) === 0
       ));
+      const existingCoverage = parsed.data.coverageId ? existingCoverages.find(item => item.id === parsed.data.coverageId && item.supplierId === supplier.id) : namedCoverage;
+      if (parsed.data.coverageId && !existingCoverage) throw new CoverageConflict('El mapa seleccionado ya no está vigente para este proveedor.');
+      if (parsed.data.operation === 'add' && existingCoverage) throw new CoverageConflict('Ya existe un mapa con este nombre. Selecciónalo para sustituirlo.');
+      if (parsed.data.operation === 'replace' && !existingCoverage) throw new CoverageConflict('Selecciona el mapa vigente que deseas sustituir.');
+      if (existingCoverage && !parsed.data.expectedRevisionId) { res.status(428).json({ status: 'error', message: 'Se requiere la revisión vigente del mapa para sustituirlo.' }); return; }
+      if (!existingCoverage && parsed.data.expectedRevisionId) throw new CoverageConflict();
+      if (!existingCoverage && !parsed.data.operation && existingCoverages.some(item => item.supplierId === supplier.id)) { res.status(428).json({ status: 'error', message: 'Indica coverageId para sustituir un mapa o operation=add para agregar uno independiente.' }); return; }
+      const polygonCount = validateCoverageUpload(parsed.data.data, existingCoverage);
       const record = {
-        id: existingCoverage?.id ?? coverageId(supplier.id, parsed.data.sourceFileName),
+        id: existingCoverage?.id ?? `COV-${supplier.id}-${randomUUID()}`,
         supplierId: supplier.id,
         supplierName: supplier.name,
         sourceFileName: parsed.data.sourceFileName,
@@ -222,10 +314,51 @@ apiRouter.put(
         updatedAt: new Date().toISOString(),
         updatedBy: req.appUser!.email,
       };
-      res.json({ status: 'success', data: await repository.upsertSupplierCoverage(record, req.appUser!) });
+      const saved = await repository.upsertSupplierCoverage(record, req.appUser!, parsed.data.expectedRevisionId ?? null);
+      const active = (await repository.listSupplierCoverageVersions(req.appUser!)).find(item => item.id === saved.id);
+      if (!active || active.revisionId !== saved.mapVersion?.revisionId || active.sha256 !== saved.mapVersion.sha256) throw new CoverageConflict('La carga se guardó, pero otra revisión la sustituyó. Actualiza el listado para consultar el mapa activo.');
+      res.set('Cache-Control', 'no-store').json({ status: 'success', data: { ...saved, activation: { verified: true, revisionId: active.revisionId, replacedRevisionId: existingCoverage?.mapVersion?.revisionId ?? null } } });
     } catch (error) { next(error); }
   },
 );
+
+apiRouter.delete('/suppliers/:id/coverages/:coverageId', requireRole('internal_admin', 'supplier_manager'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const parsed = z.object({ expectedRevisionId: z.string().min(1).max(100) }).strict().safeParse(req.body);
+    if (!parsed.success) { res.status(428).json({ message: 'Se requiere la revisión del archivo que deseas eliminar.' }); return; }
+    await repository.retireSupplierCoverage(String(req.params.coverageId), String(req.params.id), req.appUser!, parsed.data.expectedRevisionId);
+    res.set('Cache-Control', 'no-store').json({ status: 'success', data: { id: String(req.params.coverageId), removed: true } });
+  } catch (error) { next(error); }
+});
+
+apiRouter.get('/suppliers/:id/retired-coverages', requireRole('internal_admin', 'supplier_manager', 'buyer', 'pre_sales', 'finance', 'viewer'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const retired = await repository.listRetiredSupplierCoverages(String(req.params.id), req.appUser!);
+    res.set('Cache-Control', 'no-store').json({ status: 'success', data: retired.map(item => ({ id: item.record.id, sourceFileName: item.record.sourceFileName, mapVersion: item.record.mapVersion, activityId: item.activityId, retiredAt: item.retiredAt })) });
+  } catch (error) { next(error); }
+});
+
+apiRouter.post('/suppliers/:id/coverages/:coverageId/restore', requireRole('internal_admin', 'supplier_manager'), async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const parsed = z.object({ activityId: z.string().uuid() }).strict().safeParse(req.body);
+    if (!parsed.success) { res.status(428).json({ message: 'Selecciona el retiro vigente del archivo que deseas restaurar.' }); return; }
+    const saved = await repository.restoreSupplierCoverage(String(req.params.coverageId), String(req.params.id), req.appUser!, parsed.data.activityId);
+    res.set('Cache-Control', 'no-store').json({ status: 'success', data: saved });
+  } catch (error) { next(error); }
+});
+
+apiRouter.get('/suppliers/:id/coverage-activity', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const parsed = z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), before: z.string().uuid().optional() }).safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ status: 'error', message: 'La paginación del historial no es válida.' }); return; }
+    const events = await repository.listCoverageActivity(String(req.params.id), req.appUser!);
+    const start = parsed.data.before ? events.findIndex(event => event.id === parsed.data.before) + 1 : 0;
+    if (parsed.data.before && start === 0) { res.status(400).json({ status: 'error', message: 'El cursor de historial no existe.' }); return; }
+    const items = events.slice(start, start + parsed.data.limit);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ status: 'success', data: { items, nextCursor: start + items.length < events.length ? items.at(-1)?.id : null } });
+  } catch (error) { next(error); }
+});
 
 apiRouter.get('/deliveries', async (req: AuthenticatedRequest, res, next) => {
   try { res.json({ status: 'success', data: await repository.listDeliveries(req.appUser!) }); }

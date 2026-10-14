@@ -1,6 +1,19 @@
 import { z } from 'zod';
 
 const schema = z.object({
+  CX_MAIL_FROM: z.preprocess(value => value === '' ? undefined : value, z.string().email().optional()),
+  CX_PUBLIC_URL: z.string().url().default('https://ai-stg-node02.serv.net.mx:8081/cx'),
+  SMTP_HOST: z.string().default('smtp-relay.gmail.com'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  ADDRESS_SEARCH_PROVIDER: z.enum(['photon', 'google']).default('google'),
+  GOOGLE_MAPS_API_KEY: z.string().optional(),
+  GOOGLE_MAPS_BROWSER_KEY: z.string().optional(),
+  ADDRESS_AUTOCOMPLETE_URL: z.string().url().default('https://photon.komoot.io'),
+  GEOCODING_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
+  GEOCODING_SIGNING_SECRET: z.preprocess(value => value === '' ? undefined : value, z.string().min(32).optional()),
+  GEOCODING_USER_AGENT: z.string().min(5).default('LinkPartner-CX/0.2 address-validation'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   AUTH_MODE: z.enum(['development', 'oidc']).optional(),
@@ -12,12 +25,31 @@ const schema = z.object({
   GOOGLE_CLOUD_PROJECT: z.string().optional(),
   FIRESTORE_DATABASE_ID: z.string().default('(default)'),
   BOOTSTRAP_ADMIN_EMAILS: z.string().default(''),
+  HUB_API_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
+  HUB_APPLICATION_SLUG: z.string().regex(/^[a-z0-9-]+$/).default('link-partner'),
+  HUB_DEPLOYMENT_ID: z.string().default(''),
+  HUB_INTERNAL_TENANT_SLUG: z.string().default(''),
+}).superRefine((env, context) => {
+  if (env.HUB_API_URL && (!/^[a-f0-9]{24}$/.test(env.HUB_DEPLOYMENT_ID) || !env.HUB_INTERNAL_TENANT_SLUG)) context.addIssue({ code: 'custom', message: 'La integración con Hub requiere deployment y organización interna explícitos.' });
 });
 
 const env = schema.parse(process.env);
 
 export const config = {
+  mailFrom: env.CX_MAIL_FROM,
+  cxPublicUrl: env.CX_PUBLIC_URL,
+  smtpHost: env.SMTP_HOST,
+  smtpPort: env.SMTP_PORT,
+  smtpUser: env.SMTP_USER,
+  smtpPassword: env.SMTP_PASSWORD,
   nodeEnv: env.NODE_ENV,
+  addressSearchProvider: env.ADDRESS_SEARCH_PROVIDER,
+  googleMapsApiKey: env.GOOGLE_MAPS_API_KEY,
+  googleMapsBrowserKey: env.GOOGLE_MAPS_BROWSER_KEY,
+  addressAutocompleteUrl: env.ADDRESS_AUTOCOMPLETE_URL,
+  geocodingUrl: env.GEOCODING_URL,
+  geocodingSigningSecret: env.GEOCODING_SIGNING_SECRET,
+  geocodingUserAgent: env.GEOCODING_USER_AGENT,
   port: env.PORT,
   authMode: env.AUTH_MODE || (env.NODE_ENV === 'production' ? 'oidc' : 'development'),
   dataBackend: env.DATA_BACKEND || (env.NODE_ENV === 'production' ? 'firestore' : 'memory'),
@@ -28,4 +60,8 @@ export const config = {
   googleCloudProject: env.GOOGLE_CLOUD_PROJECT,
   firestoreDatabaseId: env.FIRESTORE_DATABASE_ID,
   bootstrapAdminEmails: new Set(env.BOOTSTRAP_ADMIN_EMAILS.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)),
+  hubApiUrl: env.HUB_API_URL?.replace(/\/$/, ''),
+  hubApplicationSlug: env.HUB_APPLICATION_SLUG,
+  hubDeploymentId: env.HUB_DEPLOYMENT_ID,
+  hubInternalTenantSlug: env.HUB_INTERNAL_TENANT_SLUG,
 };

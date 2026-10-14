@@ -9,7 +9,7 @@
 .delivery-table .next-action { max-width: 250px; white-space: normal; line-height: 1.4; }
 .flow-chip { display: inline-flex; padding: 4px 7px; border-radius: 99px; background: var(--paper-deep); font-size: 10px; font-weight: 700; }
 .flow-chip--servnet { color: var(--blue-network); background: #d7e9e5; }
-.flow-chip--terceros { color: var(--terracotta-dark); background: var(--terracotta-soft); }
+.flow-chip--terceros { color: var(--accent-hover); background: var(--accent-soft); }
 .flow-chip--hibrido { color: #6a5421; background: #eee2bf; }
 .baseline-change { display: flex !important; align-items: center; gap: 3px; color: var(--amber) !important; }
 @media (max-width: 700px) { .delivery-filters { align-items: stretch; } .delivery-filters .filters { width: 100%; } .delivery-filters .control, .select-control { width: 100%; } .delivery-filters .control--search input { min-width: 0; width: 100%; } }

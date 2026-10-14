@@ -1,18 +1,20 @@
 import { useEffect, useMemo } from 'react';
 import type { Feature, Geometry } from 'geojson';
 import L, { type Layer } from 'leaflet';
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
-import type { CoverageLayer, MapLocation } from '../lib/coverageFiles';
+import { CircleMarker, GeoJSON, MapContainer, Marker, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { coverageDisplayData, type CoverageLayer, type MapLocation } from '../lib/coverageFiles';
 import 'leaflet/dist/leaflet.css';
 
 interface LeafletMapCanvasProps {
   compact: boolean;
+  locationPin?: boolean;
   coverageLayers: CoverageLayer[];
   focusLocation: MapLocation | null;
   onLocationSelect?: (location: MapLocation) => void;
 }
 
 const MEXICO_CENTER: L.LatLngExpression = [23.6345, -102.5528];
+const LOCATION_PIN = L.divIcon({ className: 'consultation-location-pin', iconSize: [32, 42], iconAnchor: [16, 42], tooltipAnchor: [0, -38], html: '<svg width="32" height="42" viewBox="0 0 32 42" aria-hidden="true"><path d="M16 40S2 24 2 16a14 14 0 1 1 28 0c0 8-14 24-14 24Z" fill="#136f92" stroke="white" stroke-width="2"/><circle cx="16" cy="16" r="5" fill="white"/></svg>' });
 const MEXICO_COVERAGE_EXTENT = {
   south: 14,
   west: -119,
@@ -154,8 +156,9 @@ function MapClickHandler({ onLocationSelect }: Pick<LeafletMapCanvasProps, 'onLo
   return null;
 }
 
-export default function LeafletMapCanvas({ compact, coverageLayers, focusLocation, onLocationSelect }: LeafletMapCanvasProps) {
+export default function LeafletMapCanvas({ compact, locationPin = false, coverageLayers, focusLocation, onLocationSelect }: LeafletMapCanvasProps) {
   const coverageBounds = useMemo(() => visibleCoverageBounds(coverageLayers), [coverageLayers]);
+  const displayLayers = useMemo(() => coverageLayers.filter(layer => layer.visible).map(layer => ({ ...layer, data: coverageDisplayData(layer.data) })), [coverageLayers]);
 
   return (
     <MapContainer
@@ -181,14 +184,14 @@ export default function LeafletMapCanvas({ compact, coverageLayers, focusLocatio
         keepBuffer={4}
       />
 
-      {coverageLayers.filter((layer) => layer.visible).map((coverageLayer) => (
+      {displayLayers.map((coverageLayer) => (
         <GeoJSON
           key={coverageLayer.id}
           data={coverageLayer.data}
           style={(feature) => featurePathOptions(feature, coverageLayer)}
           pointToLayer={(feature, latlng) => L.circleMarker(latlng, {
             radius: 5,
-            color: '#fffdf8',
+            color: '#ffffff',
             weight: 2,
             fillColor: featurePathOptions(feature, coverageLayer).fillColor,
             fillOpacity: 1,
@@ -197,11 +200,13 @@ export default function LeafletMapCanvas({ compact, coverageLayers, focusLocatio
         />
       ))}
 
-      {focusLocation ? (
+      {focusLocation && locationPin ? <Marker position={[focusLocation.lat, focusLocation.lng]} icon={LOCATION_PIN} title={focusLocation.label}>
+        <Tooltip permanent direction="top">{focusLocation.label}</Tooltip>
+      </Marker> : focusLocation ? (
         <CircleMarker
           center={[focusLocation.lat, focusLocation.lng]}
           radius={8}
-          pathOptions={{ color: '#fffdf8', weight: 3, fillColor: '#b5502f', fillOpacity: 1 }}
+          pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#136f92', fillOpacity: 1 }}
         >
           <Tooltip permanent direction="top" offset={[0, -8]}>{focusLocation.label}</Tooltip>
         </CircleMarker>

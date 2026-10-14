@@ -1,22 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
   color-scheme: light;
-  --paper: #efeae0;
-  --paper-deep: #e5ded2;
-  --surface: #f8f5ef;
-  --surface-raised: #fffdf8;
-  --surface-hover: rgba(255, 255, 255, .45);
-  --ink: #1b1712;
-  --text-muted: #5d5a54;
-  --text-faint: #8b877f;
-  --border: rgba(47, 42, 35, .18);
-  --border-soft: rgba(47, 42, 35, .10);
-  --border-strong: rgba(47, 42, 35, .35);
-  --terracotta: #b5502f;
-  --terracotta-dark: #913c23;
-  --terracotta-soft: #ecd9cc;
-  --blue-network: #157a78;
+  --paper: #f7f9fc;
+  --paper-deep: #e9f0f6;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #f2f6fa;
+  --ink: #162638;
+  --text-muted: #546578;
+  --text-faint: #66788b;
+  --border: #e0e7ee;
+  --border-soft: #edf1f5;
+  --border-strong: #cbd6e0;
+  --brand-partner: #1683aa;
+  --accent: #136f92;
+  --accent-hover: #105b78;
+  --accent-soft: #eef8fc;
+  --blue-network: #1683aa;
   --red-network: #a33a3a;
   --sage: #4c7a6b;
   --amber: #c58a16;
@@ -29,6 +30,6 @@
   --radius-xs: 4px;
   --radius-sm: 7px;
   --radius-md: 10px;
-  --shadow: 0 10px 30px rgba(39, 31, 20, .06);
+  --shadow: 0 10px 30px rgba(22, 38, 56, .06);
   --transition: 160ms ease;
 }

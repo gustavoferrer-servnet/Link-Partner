@@ -18,6 +18,7 @@ export function OpportunityTable({ items, compact = false }: { items: Opportunit
             <th>SLA</th>
             <th>Entrega</th>
             <th>Estado</th>
+            {!compact ? <th>Registrada por</th> : null}
             <th aria-label="Acción" />
           </tr>
         </thead>
@@ -25,12 +26,13 @@ export function OpportunityTable({ items, compact = false }: { items: Opportunit
           {items.slice(0, compact ? 6 : undefined).map((item) => (
             <tr key={item.id} tabIndex={0} onClick={() => navigate(`/opportunities/${item.id}`)} onKeyDown={(event) => event.key === 'Enter' && navigate(`/opportunities/${item.id}`)}>
               <td><code>{item.id}</code></td>
-              <td>{item.origin}</td>
-              <td><strong>{item.siteId}</strong><small>{item.city}</small></td>
-              <td><span className={`level level--${item.level.toLowerCase()}`}>{item.level}</span></td>
+              <td>{item.source === 'COVERAGE' ? 'Cobertura' : item.source || item.origin}</td>
+              <td><strong>{item.source === 'COVERAGE' ? item.siteName : item.siteId}</strong><small>{item.city}</small></td>
+              <td>{item.level ? <span className={`level level--${item.level.toLowerCase()}`}>{item.level}</span> : 'Por definir'}</td>
               <td>{item.clientSla}</td>
               <td>{item.deliveryDate}</td>
               <td><Status>{item.status}</Status></td>
+              {!compact ? <td>{item.prefeasibility?.createdBy?.displayName || 'Sin registro histórico'}</td> : null}
               <td><ChevronRight size={15} /></td>
             </tr>
           ))}

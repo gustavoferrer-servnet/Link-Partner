@@ -1,0 +1,49 @@
+name: link-partner-cx
+services:
+  link-partner-cx-edge:
+    image: alpine/socat:latest
+    restart: unless-stopped
+    command: ["TCP-LISTEN:8081,fork,reuseaddr", "TCP:link-partner-cx-https:8081"]
+    ports:
+      - "8081:8081"
+    networks:
+      - app-hub
+    security_opt:
+      - no-new-privileges:true
+  link-partner-cx-https:
+    image: ${CX_CADDY_IMAGE:-app-hub-staging-caddy}
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile.cx:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - cx-caddy-config:/config
+    networks:
+      - app-hub
+    security_opt:
+      - no-new-privileges:true
+  link-partner-cx:
+    image: link-partner-cx:${CX_VERSION:-0.3.0}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.cx.prebuilt
+    restart: unless-stopped
+    ports:
+      - "${CX_BIND_ADDRESS:-127.0.0.1}:${CX_HTTP_PORT:-5174}:8080"
+    networks:
+      - app-hub
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+networks:
+  app-hub:
+    external: true
+    name: app-hub-staging_default
+volumes:
+  caddy-data:
+    external: true
+    name: app-hub-staging_caddy_data
+  cx-caddy-config:

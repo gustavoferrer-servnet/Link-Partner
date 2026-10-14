@@ -1,0 +1,2 @@
+FROM link-partner-web:0.2.0
+COPY apps/operations/dist /usr/share/nginx/html

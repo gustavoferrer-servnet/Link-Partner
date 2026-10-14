@@ -15,7 +15,7 @@
 .project-trace i { color: var(--text-faint); font-style: normal; }
 .project-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); }
 .project-tabs button { padding: 11px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
-.project-tabs button.is-active { border-bottom-color: var(--terracotta); color: var(--terracotta); }
+.project-tabs button.is-active { border-bottom-color: var(--accent); color: var(--accent); }
 .inline-feedback { padding: 10px 12px; border: 1px solid #a8c8bd; border-radius: var(--radius-sm); background: #e3eee9; color: #285f4d; font-size: 12px; }
 .inline-feedback--error { border-color: #d7aaa0; background: #f1dcd7; color: var(--danger); }
 .delivery-detail__grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, .7fr); gap: 14px; align-items: start; }

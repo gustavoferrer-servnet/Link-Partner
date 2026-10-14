@@ -12,7 +12,18 @@ const tones: Record<string, string> = {
   'Aprobado P2': 'green',
   'Solo P3': 'blue',
   'En observación': 'red',
+  'En validación inicial': 'amber',
+  'Habilitado provisional': 'amber',
+  'Habilitado': 'green',
+  'Condicionado': 'amber',
+  'Restringido para nuevas contrataciones': 'red',
   'Pendiente de homologación': 'amber',
+  'Propuesta pendiente': 'amber',
+  'Revisión técnica': 'amber',
+  'Sin cobertura': 'red',
+  'Validación pendiente': 'amber',
+  'Prefactible': 'green',
+  'Por validar': 'amber',
 };
 
 export function Status({ children }: { children: ReactNode }) {

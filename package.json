@@ -10,7 +10,8 @@
     "dev": "npm run dev --workspace=@link-partner/web",
     "dev:api": "npm run dev --workspace=@link-partner/api",
     "build": "npm run build --workspace=@link-partner/api && npm run build --workspace=@link-partner/web",
-    "check": "npm run check --workspace=@link-partner/api && npm run check --workspace=@link-partner/web"
+    "check": "npm run check --workspace=@link-partner/api && npm run check --workspace=@link-partner/web",
+    "test": "npm run test --workspace=@link-partner/api"
   },
   "engines": {
     "node": ">=20"

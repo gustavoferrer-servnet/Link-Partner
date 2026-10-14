@@ -1,3 +1,5 @@
+import { SupplierOperationalBadge } from '../components/SupplierOperationalBadge';
+import { useSupplierCoverages } from '../lib/useSupplierCoverages';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, Layers3, MapPin } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -9,6 +11,8 @@ import { useSession } from '../auth/SessionContext';
 import { CoverageLayerTree } from '../components/CoverageLayerTree';
 import { NetworkMap } from '../components/NetworkMap';
 import { ResolutionCascade } from '../components/ResolutionCascade';
+import { DigitalConsultationDetail } from '../components/DigitalConsultationDetail';
+import { CoverageOpportunityDetail } from '../components/CoverageOpportunityDetail';
 import { config } from '../config';
 import { coverageSourceLayers, type CoverageLayer, type MapLocation } from '../lib/coverageFiles';
 import type { Opportunity, SupplierCoverage } from '../types';
@@ -20,26 +24,23 @@ const EMPTY_COVERAGES: SupplierCoverage[] = [];
 export function OpportunityDetailPage() {
   const { id } = useParams();
   const { token } = useSession();
-  const usesApi = config.dataMode === 'api';
+  const usesApi = config.dataMode === 'api' || id?.startsWith('OPP-DIGITAL-') === true;
   const demoOpportunity = useMemo(() => opportunities.find((item) => item.id === id) || opportunities[0], [id]);
   const opportunityQuery = useQuery({
-    queryKey: ['opportunity', id],
+    queryKey: ['opportunity', id, token],
     queryFn: ({ signal }) => apiGet<Opportunity>(`/opportunities/${encodeURIComponent(id || '')}`, token, signal),
     enabled: usesApi && Boolean(id),
   });
-  const coverageQuery = useQuery({
-    queryKey: ['supplier-coverages'],
-    queryFn: ({ signal }) => apiGet<SupplierCoverage[]>('/supplier-coverages', token, signal),
-    enabled: usesApi,
-  });
+  const coverageQuery = useSupplierCoverages(token, usesApi && Boolean(opportunityQuery.data) && !opportunityQuery.data?.source);
   const opportunity = usesApi ? opportunityQuery.data ?? demoOpportunity : demoOpportunity;
   const supplierCoverages = coverageQuery.data ?? EMPTY_COVERAGES;
-  const [hiddenLayerIds, setHiddenLayerIds] = useState<Set<string>>(() => new Set());
+  const [layerVisibility, setLayerVisibility] = useState<Map<string, boolean>>(() => new Map());
   const [selected, setSelected] = useState(proposals[0].id);
   const [justification, setJustification] = useState('');
   const coverageLayers = useMemo<CoverageLayer[]>(() => supplierCoverages.flatMap((coverage) => (
-    coverageSourceLayers(coverage).map((layer) => ({ ...layer, visible: !hiddenLayerIds.has(layer.id) }))
-  )), [hiddenLayerIds, supplierCoverages]);
+    coverageSourceLayers(coverage).map((layer) => ({ ...layer, visible: layerVisibility.get(layer.id) ?? layer.visible }))
+  )), [layerVisibility, supplierCoverages]);
+  const hiddenLayerIds = useMemo(() => new Set(coverageLayers.filter(layer => !layer.visible).map(layer => layer.id)), [coverageLayers]);
   const siteLocation = useMemo<MapLocation | null>(() => (
     typeof opportunity.latitude === 'number' && typeof opportunity.longitude === 'number'
       ? { lat: opportunity.latitude, lng: opportunity.longitude, label: opportunity.siteId }
@@ -47,17 +48,20 @@ export function OpportunityDetailPage() {
   ), [opportunity.latitude, opportunity.longitude, opportunity.siteId]);
 
   function toggleLayerIds(layerIds: string[]) {
-    setHiddenLayerIds((current) => {
-      const next = new Set(current);
-      const allHidden = layerIds.every((layerId) => next.has(layerId));
+    setLayerVisibility((current) => {
+      const next = new Map(current);
+      const allHidden = layerIds.every((layerId) => hiddenLayerIds.has(layerId));
       for (const layerId of layerIds) {
-        if (allHidden) next.delete(layerId);
-        else next.add(layerId);
+        next.set(layerId, allHidden);
       }
       return next;
     });
   }
 
+  if (usesApi && opportunityQuery.isPending) return <div className="page">Cargando oportunidad…</div>;
+  if (usesApi && opportunityQuery.isError) return <div className="page" role="alert">No fue posible cargar esta oportunidad. <Link to="/opportunities">Volver</Link></div>;
+  if (opportunity.source === 'DIGITAL') return <DigitalConsultationDetail opportunity={opportunity} />;
+  if (opportunity.source === 'COVERAGE') return <CoverageOpportunityDetail opportunity={opportunity} />;
   return (
     <div className="page section-stack opportunity-detail">
       <Link className="back-link" to="/opportunities"><ArrowLeft size={15} /> Volver a oportunidades</Link>
@@ -79,11 +83,11 @@ export function OpportunityDetailPage() {
             </div>
           </section>
 
-          <ResolutionCascade active={opportunity.level} />
+          {opportunity.level ? <ResolutionCascade active={opportunity.level} /> : null}
 
           <section className="panel">
             <div className="panel__header"><h2>Propuestas recibidas</h2><span>{proposals.length} respuestas normalizadas</span></div>
-            <div className="table-wrap"><table className="data-table proposal-table"><thead><tr><th /><th>Proveedor</th><th>MRC</th><th>NRC</th><th>Entrega</th><th>Disponibilidad</th><th>MTTR</th><th>Scorecard</th><th>Score total</th></tr></thead><tbody>{proposals.map((proposal) => <tr key={proposal.id} className={selected === proposal.id ? 'is-selected' : ''} onClick={() => setSelected(proposal.id)}><td><input type="radio" name="proposal" checked={selected === proposal.id} onChange={() => setSelected(proposal.id)} /></td><td><strong>{proposal.supplier}</strong><small>{proposal.kind}</small>{proposal.recommended ? <em>Propuesta recomendada</em> : null}</td><td>{money.format(proposal.mrc)}</td><td>{money.format(proposal.nrc)}</td><td>{proposal.deliveryDays} días</td><td>{proposal.availability}%</td><td className={proposal.mttrHours > 4 ? 'text-danger' : ''}>{proposal.mttrHours} h</td><td>{proposal.scorecard}/100</td><td><strong>{proposal.totalScore}/100</strong></td></tr>)}</tbody></table></div>
+            <div className="table-wrap"><table className="data-table proposal-table"><thead><tr><th /><th>Proveedor</th><th>MRC</th><th>NRC</th><th>Entrega</th><th>Disponibilidad</th><th>MTTR</th><th>Scorecard</th><th>Score total</th></tr></thead><tbody>{proposals.map((proposal) => <tr key={proposal.id} className={selected === proposal.id ? 'is-selected' : ''} onClick={() => setSelected(proposal.id)}><td><input type="radio" name="proposal" checked={selected === proposal.id} onChange={() => setSelected(proposal.id)} /></td><td><strong>{proposal.supplier}</strong><small>{proposal.kind}</small>{proposal.recommended ? <em>Propuesta recomendada</em> : null}</td><td>{money.format(proposal.mrc)}</td><td>{money.format(proposal.nrc)}</td><td>{proposal.deliveryDays} días</td><td>{proposal.availability}%</td><td className={proposal.mttrHours > 4 ? 'text-danger' : ''}>{proposal.mttrHours} h</td><td>{config.dataMode === 'api' ? <SupplierOperationalBadge name={proposal.supplier} /> : `${proposal.scorecard}/100 (demostración)`}</td><td><strong>{proposal.totalScore}/100</strong></td></tr>)}</tbody></table></div>
           </section>
 
           <section className="panel activity-panel">
@@ -112,7 +116,7 @@ export function OpportunityDetailPage() {
 
           <section className="panel price-chart">
             <div className="panel__header"><h2>Histórico de precios MRC</h2></div>
-            <div className="panel__body"><ResponsiveContainer width="100%" height={210}><AreaChart data={priceHistory}><CartesianGrid stroke="rgba(47,42,35,.12)" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Area type="monotone" dataKey="p75" stroke="none" fill="#d6e4df" /><Area type="monotone" dataKey="p25" stroke="none" fill="#f8f5ef" /><Line type="monotone" dataKey="average" stroke="#157a78" strokeWidth={2} dot={{ r: 2 }} /></AreaChart></ResponsiveContainer></div>
+            <div className="panel__body"><ResponsiveContainer width="100%" height={210}><AreaChart data={priceHistory}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip /><Area type="monotone" dataKey="p75" stroke="none" fill="var(--accent-soft)" /><Area type="monotone" dataKey="p25" stroke="none" fill="var(--surface)" /><Line type="monotone" dataKey="average" stroke="var(--accent)" strokeWidth={2} dot={{ r: 2 }} /></AreaChart></ResponsiveContainer></div>
           </section>
         </aside>
       </div>

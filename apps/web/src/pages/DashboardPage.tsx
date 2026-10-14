@@ -1,4 +1,9 @@
+import { useMemo, useState } from 'react';
 import { MapPin, SlidersHorizontal } from 'lucide-react';
+import { useSession } from '../auth/SessionContext';
+import { config } from '../config';
+import { useSupplierCoverages } from '../lib/useSupplierCoverages';
+import { coverageSourceLayers, type MapLocation } from '../lib/coverageFiles';
 import { deliveries, opportunities } from '../data/demo';
 import { NetworkMap } from '../components/NetworkMap';
 import { ResolutionCascade } from '../components/ResolutionCascade';
@@ -6,6 +11,10 @@ import { OpportunityTable } from '../components/OpportunityTable';
 import { Status } from '../components/ui/Status';
 
 export function DashboardPage() {
+  const { token } = useSession();
+  const coverageQuery = useSupplierCoverages(token, config.dataMode === 'api');
+  const coverageLayers = useMemo(() => coverageQuery.data?.flatMap(coverageSourceLayers) ?? [], [coverageQuery.data]);
+  const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null);
   return (
     <div className="page">
       <header className="page-header">
@@ -16,7 +25,7 @@ export function DashboardPage() {
       </header>
 
       <div className="dashboard-grid">
-        <div className="dashboard-map"><NetworkMap /></div>
+        <div className="dashboard-map"><NetworkMap coverageLayers={coverageLayers} coverageLoading={coverageQuery.isLoading} coverageError={coverageQuery.isError} onCoverageRetry={() => { void coverageQuery.refetch(); }} focusLocation={selectedLocation} onLocationSelect={setSelectedLocation} /></div>
 
         <section className="panel site-insight">
           <div className="site-insight__top">
